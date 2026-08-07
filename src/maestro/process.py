@@ -22,6 +22,7 @@ class GateEvaluator(Protocol):
 @dataclass(frozen=True)
 class ProcessResult:
     case_id: str
+    payment: PaymentCase
     path: str
     agent_output: AgentOutput
     decision: PolicyDecision
@@ -51,7 +52,7 @@ class PaymentProcess:
                 raise ValueError("AUTO_APPLY requires a proposed action")
             effector_result = self.effector.apply(case, agent_output.proposed_action)
             self.ledger.append(case.case_id, "EFFECT_REQUESTED", effector_result.status)
-            return ProcessResult(case.case_id, "auto_apply", agent_output, decision, effector_result=effector_result)
+            return ProcessResult(case.case_id, case, "auto_apply", agent_output, decision, effector_result=effector_result)
 
         callback = agent_output.outcome == "NEEDS_INFO"
         path = "callback_then_human" if callback else "human_approval"
@@ -70,4 +71,4 @@ class PaymentProcess:
             permitted_actions=permitted,
         )
         self.ledger.append(case.case_id, "HUMAN_ESCALATION_CREATED", decision.gate)
-        return ProcessResult(case.case_id, path, agent_output, decision, escalation=escalation)
+        return ProcessResult(case.case_id, case, path, agent_output, decision, escalation=escalation)
