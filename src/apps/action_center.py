@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 
 from src.contracts.models import Evidence, PaymentCase, ProposedAction
 from src.effectors.stub import Effector, EffectorResult
@@ -18,9 +18,19 @@ class EscalationPayload:
     permitted_actions: tuple[str, ...]
 
     def to_dict(self) -> dict:
-        value = asdict(self)
-        value["permitted_actions"] = list(self.permitted_actions)
-        return value
+        return {
+            "payment": self.payment.model_dump(mode="json"),
+            "proposal": (
+                self.proposal.model_dump(mode="json")
+                if self.proposal is not None
+                else None
+            ),
+            "gate": getattr(self.gate, "value", self.gate),
+            "reason": self.reason,
+            "evidence": [item.model_dump(mode="json") for item in self.evidence],
+            "cutoff_time": self.cutoff_time,
+            "permitted_actions": list(self.permitted_actions),
+        }
 
 
 @dataclass(frozen=True)
