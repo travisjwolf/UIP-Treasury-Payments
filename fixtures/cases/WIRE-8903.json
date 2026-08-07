@@ -1,0 +1,39 @@
+{
+  "demo_role": null,
+  "expected_outcome": "AMBIGUOUS",
+  "expected_path": "human_approval",
+  "gate_context": {
+    "cross_border": false,
+    "evaluated_at": "2026-08-07T12:52:00-04:00",
+    "first_time_counterparty": true,
+    "same_day_beneficiary_total_usd": 37489.29,
+    "sanctions_status": "clear"
+  },
+  "payment_case": {
+    "amount_usd": 37489.29,
+    "beneficiary_account": "09565577435",
+    "beneficiary_bank_aba": "053000196",
+    "beneficiary_name": "EVERGREEN AG SERVICES",
+    "case_id": "WIRE-8903",
+    "confidence": null,
+    "currency": "USD",
+    "current_queue": "repair",
+    "customer_id": "CUST-1477",
+    "customer_name": "Blue Fern Hospitality LLC",
+    "cutoff_time": "17:00:00",
+    "cycle_time": null,
+    "direction": "inbound",
+    "exception_code": "EX-04",
+    "exception_type": "insufficient_party_identification",
+    "outcome": null,
+    "proposed_action": null,
+    "rail": "RTP",
+    "remittance_info": "MONTHLY DRAW",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "status": "pending",
+    "touch_count": 0,
+    "value_date": "2026-08-07",
+    "worked_by": null
+  }
+}

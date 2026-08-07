@@ -1,0 +1,39 @@
+{
+  "demo_role": null,
+  "expected_outcome": "RESOLVED",
+  "expected_path": "auto_apply",
+  "gate_context": {
+    "cross_border": false,
+    "evaluated_at": "2026-08-07T08:42:00-04:00",
+    "first_time_counterparty": false,
+    "same_day_beneficiary_total_usd": 115571.98,
+    "sanctions_status": "clear"
+  },
+  "payment_case": {
+    "amount_usd": 115571.98,
+    "beneficiary_account": "1965736580",
+    "beneficiary_bank_aba": "021000021",
+    "beneficiary_name": "NORTHSTAR INSURANCE TR",
+    "case_id": "WIRE-8931",
+    "confidence": null,
+    "currency": "USD",
+    "current_queue": "repair",
+    "customer_id": "CUST-1301",
+    "customer_name": "Delta Ag Supply Co",
+    "cutoff_time": "17:00:00",
+    "cycle_time": null,
+    "direction": "inbound",
+    "exception_code": "EX-04",
+    "exception_type": "insufficient_party_identification",
+    "outcome": null,
+    "proposed_action": null,
+    "rail": "Fedwire",
+    "remittance_info": "",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "status": "pending",
+    "touch_count": 0,
+    "value_date": "2026-08-07",
+    "worked_by": null
+  }
+}

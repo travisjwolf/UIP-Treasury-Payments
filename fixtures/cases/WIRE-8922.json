@@ -1,0 +1,39 @@
+{
+  "demo_role": null,
+  "expected_outcome": "RESOLVED_LOW_CONFIDENCE",
+  "expected_path": "human_approval",
+  "gate_context": {
+    "cross_border": false,
+    "evaluated_at": "2026-08-07T09:00:00-04:00",
+    "first_time_counterparty": false,
+    "same_day_beneficiary_total_usd": 179230.72,
+    "sanctions_status": "clear"
+  },
+  "payment_case": {
+    "amount_usd": 179230.72,
+    "beneficiary_account": "91982455185",
+    "beneficiary_bank_aba": "053000196",
+    "beneficiary_name": "IRONWOOD LUMBER CO",
+    "case_id": "WIRE-8922",
+    "confidence": null,
+    "currency": "USD",
+    "current_queue": "repair",
+    "customer_id": "CUST-1233",
+    "customer_name": "Sawyer Medical Group PA",
+    "cutoff_time": "17:00:00",
+    "cycle_time": null,
+    "direction": "inbound",
+    "exception_code": "EX-01",
+    "exception_type": "beneficiary_account_not_found",
+    "outcome": null,
+    "proposed_action": null,
+    "rail": "ACH",
+    "remittance_info": "",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "status": "pending",
+    "touch_count": 0,
+    "value_date": "2026-08-07",
+    "worked_by": null
+  }
+}

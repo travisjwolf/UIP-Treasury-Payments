@@ -1,0 +1,39 @@
+{
+  "demo_role": null,
+  "expected_outcome": "RESOLVED_LOW_CONFIDENCE",
+  "expected_path": "human_approval",
+  "gate_context": {
+    "cross_border": false,
+    "evaluated_at": "2026-08-07T09:45:00-04:00",
+    "first_time_counterparty": false,
+    "same_day_beneficiary_total_usd": 2302012.36,
+    "sanctions_status": "clear"
+  },
+  "payment_case": {
+    "amount_usd": 2302012.36,
+    "beneficiary_account": "69738485535",
+    "beneficiary_bank_aba": "026009593",
+    "beneficiary_name": "IRONWOOD LUMBER CO",
+    "case_id": "WIRE-8904",
+    "confidence": null,
+    "currency": "USD",
+    "current_queue": "repair",
+    "customer_id": "CUST-1520",
+    "customer_name": "Tidewater Freight Systems",
+    "cutoff_time": "17:00:00",
+    "cycle_time": null,
+    "direction": "outbound",
+    "exception_code": "EX-02",
+    "exception_type": "name_account_mismatch",
+    "outcome": null,
+    "proposed_action": null,
+    "rail": "ACH",
+    "remittance_info": "EQUIP PMT",
+    "sla_deadline": null,
+    "source_channel": "online_banking",
+    "status": "pending",
+    "touch_count": 0,
+    "value_date": "2026-08-07",
+    "worked_by": null
+  }
+}

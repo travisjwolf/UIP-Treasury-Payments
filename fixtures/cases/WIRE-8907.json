@@ -1,0 +1,39 @@
+{
+  "demo_role": null,
+  "expected_outcome": "RESOLVED",
+  "expected_path": "auto_apply",
+  "gate_context": {
+    "cross_border": false,
+    "evaluated_at": "2026-08-07T12:50:00-04:00",
+    "first_time_counterparty": false,
+    "same_day_beneficiary_total_usd": 54952.22,
+    "sanctions_status": "clear"
+  },
+  "payment_case": {
+    "amount_usd": 54952.22,
+    "beneficiary_account": "0689479173",
+    "beneficiary_bank_aba": "121000248",
+    "beneficiary_name": "MERIDIAN EQUIPMENT LEASING",
+    "case_id": "WIRE-8907",
+    "confidence": null,
+    "currency": "USD",
+    "current_queue": "repair",
+    "customer_id": "CUST-1477",
+    "customer_name": "Blue Fern Hospitality LLC",
+    "cutoff_time": "17:00:00",
+    "cycle_time": null,
+    "direction": "outbound",
+    "exception_code": "EX-04",
+    "exception_type": "insufficient_party_identification",
+    "outcome": null,
+    "proposed_action": null,
+    "rail": "ACH",
+    "remittance_info": "",
+    "sla_deadline": null,
+    "source_channel": "online_banking",
+    "status": "pending",
+    "touch_count": 0,
+    "value_date": "2026-08-07",
+    "worked_by": null
+  }
+}

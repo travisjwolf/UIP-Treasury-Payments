@@ -1,0 +1,39 @@
+{
+  "demo_role": "hero_callback",
+  "expected_outcome": "NEEDS_INFO",
+  "expected_path": "callback_then_human",
+  "gate_context": {
+    "cross_border": false,
+    "evaluated_at": "2026-08-07T09:07:00-04:00",
+    "first_time_counterparty": false,
+    "same_day_beneficiary_total_usd": 615000.0,
+    "sanctions_status": "clear"
+  },
+  "payment_case": {
+    "amount_usd": 615000.0,
+    "beneficiary_account": "4471902288",
+    "beneficiary_bank_aba": "053000196",
+    "beneficiary_name": "ATLAS TITLE & ESCROW",
+    "case_id": "WIRE-8877",
+    "confidence": null,
+    "currency": "USD",
+    "current_queue": "repair",
+    "customer_id": "CUST-1355",
+    "customer_name": "Northgate Property Partners",
+    "cutoff_time": "17:00:00",
+    "cycle_time": null,
+    "direction": "outbound",
+    "exception_code": "EX-04",
+    "exception_type": "insufficient_party_identification",
+    "outcome": null,
+    "proposed_action": null,
+    "rail": "Fedwire",
+    "remittance_info": "CLOSING FILE NG-2291",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "status": "pending",
+    "touch_count": 0,
+    "value_date": "2026-08-07",
+    "worked_by": null
+  }
+}
