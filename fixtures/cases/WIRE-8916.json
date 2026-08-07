@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8916",
+  "payment": {
+    "case_id": "WIRE-8916",
+    "rail": "ACH",
+    "direction": "outbound",
+    "amount_usd": 119990.28,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "customer_id": "CUST-1477",
+    "customer_name": "Blue Fern Hospitality LLC",
+    "beneficiary_name": "KEYSTONE MACHINE WORKS",
+    "beneficiary_account": "640255071",
+    "beneficiary_bank_aba": "121000248",
+    "remittance_info": "EQUIP PMT",
+    "exception_code": "EX-07",
+    "exception_type": "duplicate_suspect",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T08:25"
+  },
+  "expected_outcome": "AMBIGUOUS",
+  "expected_path": "human_approval"
+}

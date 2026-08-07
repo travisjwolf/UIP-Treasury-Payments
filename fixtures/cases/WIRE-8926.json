@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8926",
+  "payment": {
+    "case_id": "WIRE-8926",
+    "rail": "ACH",
+    "direction": "inbound",
+    "amount_usd": 84081.64,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "customer_id": "CUST-1355",
+    "customer_name": "Northgate Property Partners",
+    "beneficiary_name": "COASTAL FUEL DISTRIBUTORS",
+    "beneficiary_account": "74123825498",
+    "beneficiary_bank_aba": "111000025",
+    "remittance_info": "",
+    "exception_code": "EX-01",
+    "exception_type": "beneficiary_account_not_found",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "review",
+    "received_at": "2026-08-07T11:35"
+  },
+  "expected_outcome": "BLOCKED_POLICY",
+  "expected_path": "compliance_referral"
+}

@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8923",
+  "payment": {
+    "case_id": "WIRE-8923",
+    "rail": "ACH",
+    "direction": "outbound",
+    "amount_usd": 781325.76,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "customer_id": "CUST-1042",
+    "customer_name": "Ridgeline Construction LLC",
+    "beneficiary_name": "NORTHSTAR INSURANCE TR",
+    "beneficiary_account": "221374567",
+    "beneficiary_bank_aba": "111000025",
+    "remittance_info": "EQUIP PMT",
+    "exception_code": "EX-06",
+    "exception_type": "format_currency_mismatch",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": true,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T13:10"
+  },
+  "expected_outcome": "AMBIGUOUS",
+  "expected_path": "human_approval"
+}

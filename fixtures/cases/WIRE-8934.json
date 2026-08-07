@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8934",
+  "payment": {
+    "case_id": "WIRE-8934",
+    "rail": "ACH",
+    "direction": "inbound",
+    "amount_usd": 222605.82,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "customer_id": "CUST-1477",
+    "customer_name": "Blue Fern Hospitality LLC",
+    "beneficiary_name": "VERTEX MEDICAL DEVICES",
+    "beneficiary_account": "9831313636",
+    "beneficiary_bank_aba": "053000196",
+    "remittance_info": "PAYROLL FUNDING",
+    "exception_code": "EX-01",
+    "exception_type": "beneficiary_account_not_found",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "review",
+    "received_at": "2026-08-07T09:19"
+  },
+  "expected_outcome": "BLOCKED_POLICY",
+  "expected_path": "compliance_referral"
+}

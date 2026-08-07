@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8900",
+  "payment": {
+    "case_id": "WIRE-8900",
+    "rail": "Fedwire",
+    "direction": "inbound",
+    "amount_usd": 173607.55,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "customer_id": "CUST-1520",
+    "customer_name": "Tidewater Freight Systems",
+    "beneficiary_name": "MERIDIAN EQUIPMENT LEASING",
+    "beneficiary_account": "8821469368",
+    "beneficiary_bank_aba": "053000196",
+    "remittance_info": "PAYROLL FUNDING",
+    "exception_code": "EX-01",
+    "exception_type": "beneficiary_account_not_found",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T09:55"
+  },
+  "expected_outcome": "RESOLVED_LOW_CONFIDENCE",
+  "expected_path": "human_approval"
+}

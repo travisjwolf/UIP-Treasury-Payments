@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8935",
+  "payment": {
+    "case_id": "WIRE-8935",
+    "rail": "ACH",
+    "direction": "inbound",
+    "amount_usd": 117626.09,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "online_banking",
+    "customer_id": "CUST-1355",
+    "customer_name": "Northgate Property Partners",
+    "beneficiary_name": "SUMMIT PAYROLL SERVICES",
+    "beneficiary_account": "6564376617",
+    "beneficiary_bank_aba": "111000025",
+    "remittance_info": "PAYROLL FUNDING",
+    "exception_code": "EX-05",
+    "exception_type": "unstructured_remittance",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T08:53"
+  },
+  "expected_outcome": "RESOLVED",
+  "expected_path": "auto_apply"
+}

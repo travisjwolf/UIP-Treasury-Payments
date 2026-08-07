@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8933",
+  "payment": {
+    "case_id": "WIRE-8933",
+    "rail": "Fedwire",
+    "direction": "outbound",
+    "amount_usd": 157127.38,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "online_banking",
+    "customer_id": "CUST-1042",
+    "customer_name": "Ridgeline Construction LLC",
+    "beneficiary_name": "PACIFIC STEEL & SUPPLY",
+    "beneficiary_account": "05542829186",
+    "beneficiary_bank_aba": "026009593",
+    "remittance_info": "",
+    "exception_code": "EX-03",
+    "exception_type": "missing_intermediary_routing",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T10:55"
+  },
+  "expected_outcome": "RESOLVED",
+  "expected_path": "auto_apply"
+}

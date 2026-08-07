@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8914",
+  "payment": {
+    "case_id": "WIRE-8914",
+    "rail": "Fedwire",
+    "direction": "outbound",
+    "amount_usd": 224158.14,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "customer_id": "CUST-1188",
+    "customer_name": "Harbor Point Logistics Inc",
+    "beneficiary_name": "BRIGHTLINE ELECTRICAL",
+    "beneficiary_account": "083204422",
+    "beneficiary_bank_aba": "053000196",
+    "remittance_info": "EQUIP PMT",
+    "exception_code": "EX-04",
+    "exception_type": "insufficient_party_identification",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": true,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T12:00"
+  },
+  "expected_outcome": "AMBIGUOUS",
+  "expected_path": "human_approval"
+}

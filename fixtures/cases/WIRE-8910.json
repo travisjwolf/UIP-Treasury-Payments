@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8910",
+  "payment": {
+    "case_id": "WIRE-8910",
+    "rail": "Fedwire",
+    "direction": "inbound",
+    "amount_usd": 238621.13,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "file_upload",
+    "customer_id": "CUST-1520",
+    "customer_name": "Tidewater Freight Systems",
+    "beneficiary_name": "HALLMARK FREIGHT BROKERS",
+    "beneficiary_account": "6092386989",
+    "beneficiary_bank_aba": "053000196",
+    "remittance_info": "",
+    "exception_code": "EX-06",
+    "exception_type": "format_currency_mismatch",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T09:00"
+  },
+  "expected_outcome": "RESOLVED",
+  "expected_path": "auto_apply"
+}

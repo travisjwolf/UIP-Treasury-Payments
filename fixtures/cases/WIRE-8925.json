@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8925",
+  "payment": {
+    "case_id": "WIRE-8925",
+    "rail": "ACH",
+    "direction": "inbound",
+    "amount_usd": 970226.44,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "customer_id": "CUST-1409",
+    "customer_name": "Kestrel Manufacturing Corp",
+    "beneficiary_name": "PACIFIC STEEL & SUPPLY",
+    "beneficiary_account": "4425047608",
+    "beneficiary_bank_aba": "026009593",
+    "remittance_info": "REF 88-2210 PARTIAL",
+    "exception_code": "EX-03",
+    "exception_type": "missing_intermediary_routing",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T13:09"
+  },
+  "expected_outcome": "RESOLVED_LOW_CONFIDENCE",
+  "expected_path": "human_approval"
+}

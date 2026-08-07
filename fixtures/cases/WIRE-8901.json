@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8901",
+  "payment": {
+    "case_id": "WIRE-8901",
+    "rail": "Fedwire",
+    "direction": "outbound",
+    "amount_usd": 2151934.57,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "customer_id": "CUST-1301",
+    "customer_name": "Delta Ag Supply Co",
+    "beneficiary_name": "CLEARWATER SANITATION",
+    "beneficiary_account": "1401193331",
+    "beneficiary_bank_aba": "053000196",
+    "remittance_info": "SETTLEMENT",
+    "exception_code": "EX-01",
+    "exception_type": "beneficiary_account_not_found",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T11:22"
+  },
+  "expected_outcome": "RESOLVED_LOW_CONFIDENCE",
+  "expected_path": "human_approval"
+}

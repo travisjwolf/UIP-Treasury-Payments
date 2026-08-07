@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8936",
+  "payment": {
+    "case_id": "WIRE-8936",
+    "rail": "Fedwire",
+    "direction": "outbound",
+    "amount_usd": 140677.34,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "branch_teller",
+    "customer_id": "CUST-1042",
+    "customer_name": "Ridgeline Construction LLC",
+    "beneficiary_name": "SUMMIT PAYROLL SERVICES",
+    "beneficiary_account": "942791132",
+    "beneficiary_bank_aba": "026009593",
+    "remittance_info": "PAYROLL FUNDING",
+    "exception_code": "EX-02",
+    "exception_type": "name_account_mismatch",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T09:24"
+  },
+  "expected_outcome": "RESOLVED",
+  "expected_path": "auto_apply"
+}

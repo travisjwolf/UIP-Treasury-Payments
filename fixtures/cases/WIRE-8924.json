@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8924",
+  "payment": {
+    "case_id": "WIRE-8924",
+    "rail": "Fedwire",
+    "direction": "outbound",
+    "amount_usd": 178693.02,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "customer_id": "CUST-1409",
+    "customer_name": "Kestrel Manufacturing Corp",
+    "beneficiary_name": "KEYSTONE MACHINE WORKS",
+    "beneficiary_account": "19075144022",
+    "beneficiary_bank_aba": "121000248",
+    "remittance_info": "MONTHLY DRAW",
+    "exception_code": "EX-02",
+    "exception_type": "name_account_mismatch",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": true,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T10:02"
+  },
+  "expected_outcome": "AMBIGUOUS",
+  "expected_path": "human_approval"
+}

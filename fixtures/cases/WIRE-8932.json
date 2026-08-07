@@ -1,0 +1,38 @@
+{
+  "case_id": "WIRE-8932",
+  "payment": {
+    "case_id": "WIRE-8932",
+    "rail": "Fedwire",
+    "direction": "outbound",
+    "amount_usd": 1277006.98,
+    "currency": "USD",
+    "value_date": "2026-08-07",
+    "cutoff_time": "17:00",
+    "sla_deadline": null,
+    "source_channel": "phone_fax",
+    "customer_id": "CUST-1355",
+    "customer_name": "Northgate Property Partners",
+    "beneficiary_name": "VERTEX MEDICAL DEVICES",
+    "beneficiary_account": "0886659143",
+    "beneficiary_bank_aba": "111000025",
+    "remittance_info": "EQUIP PMT",
+    "exception_code": "EX-01",
+    "exception_type": "beneficiary_account_not_found",
+    "current_queue": "repair",
+    "status": "in_flight",
+    "worked_by": null,
+    "confidence": null,
+    "proposed_action": null,
+    "outcome": null,
+    "touch_count": 0,
+    "cycle_time": null
+  },
+  "fixture_metadata": {
+    "demo_role": "",
+    "first_time_counterparty": false,
+    "sanctions_flag": "clear",
+    "received_at": "2026-08-07T10:25"
+  },
+  "expected_outcome": "RESOLVED_LOW_CONFIDENCE",
+  "expected_path": "human_approval"
+}
