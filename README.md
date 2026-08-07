@@ -10,7 +10,7 @@ Pre-work for the UiPath AMER SE Build Challenge, Friday 7 August 2026. Treasury 
 
 If you have five minutes: read §"The idea" below, then `docs/PDD-wire-repair.md`.
 
-If you are about to build: read `AGENTS.md`. It is written for a coding agent but it is also the fastest orientation for a human.
+If you are about to build: read `AGENTS.md`, then `docs/three-instance-build-plan.md`. The plan assigns the work to the `alpha`, `bravo`, and `charlie` branches and includes the prompts to start each Codex instance.
 
 ---
 
@@ -33,6 +33,7 @@ If you are about to build: read `AGENTS.md`. It is written for a coding agent bu
 | `AGENTS.md` | Full build context: stack, data contracts, hard rules, build order, starting prompt. Codex and Claude Code read this automatically. |
 | `docs/PDD-wire-repair.md` | One-page process design document, grounded in the Ameris transcripts. Feeds `uipath-planner` on Friday to produce the SDD. |
 | `docs/exception-taxonomy-and-gates.md` | Seven exception types with resolution paths, six typed outcomes, eleven deterministic policy gates. The domain thinking. |
+| `docs/three-instance-build-plan.md` | Phase-gated Alpha / Bravo / Charlie execution plan, ownership map, prompts, and merge protocol. |
 | `docs/business-case-skeleton.md` | Three-layer model: deposits, capacity, FTE. Not needed for the build. |
 | `fixtures/payments.csv` | 40 synthetic payment cases with expected outcomes |
 | `fixtures/counterparty_history.csv` | Prior repair history the agent reasons over |
@@ -60,6 +61,8 @@ The most important demo case is `WIRE-8841`, where the agent finds the right ans
 - [ ] `uip login` works against a tenant you can actually deploy to
 - [ ] `uip codedagent init` scaffolds and runs locally
 - [ ] Read `AGENTS.md`
+- [ ] Confirm the `alpha`, `bravo`, and `charlie` branches exist on `origin`
+- [ ] Read `docs/three-instance-build-plan.md` and claim one role per person
 - [ ] Sanity-check the volume assumptions in `docs/PDD-wire-repair.md` §9 if you have access to the Ameris queue data
 
 Everyone on the team should have a working coding-agent setup before Friday morning. The build plan assumes at least three people can each run an independent branch. If it is two, the effectors stay stubbed permanently.
