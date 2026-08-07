@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "id": "ExactHeroOutputEvaluator",
+  "evaluatorTypeId": "uipath-exact-match",
+  "description": "Requires the complete deterministic six-field output, including evidence and reasoning, to match exactly.",
+  "evaluatorConfig": {
+    "name": "ExactHeroOutputEvaluator",
+    "targetOutputKey": "*",
+    "ignoreCase": false,
+    "negated": false,
+    "defaultEvaluationCriteria": {
+      "expectedOutput": {}
+    }
+  }
+}

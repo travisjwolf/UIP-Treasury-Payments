@@ -2,17 +2,17 @@
   "version": "1.0",
   "id": "treasury-payment-hero-smoke",
   "name": "Treasury Payment Hero Smoke Tests",
-  "description": "Validates the exact proposed repairs, outcomes, confidence values, and read-only tool order for WIRE-8802 and WIRE-8841.",
+  "description": "Validates two pinned repair paths plus bounded exhaustion with exact evidence-backed outputs.",
   "evaluatorRefs": [
-    "HeroOutputEvaluator"
+    "HeroOutputEvaluator",
+    "ExactHeroOutputEvaluator"
   ],
   "evaluations": [
     {
       "id": "hero-wire-8802-name-repair",
       "name": "WIRE-8802 resolves the known beneficiary name mismatch",
       "inputs": {
-        "case_id": "WIRE-8802",
-        "payment": {
+        "payment_case": {
           "case_id": "WIRE-8802",
           "rail": "Fedwire",
           "direction": "outbound",
@@ -31,7 +31,7 @@
           "exception_code": "EX-02",
           "exception_type": "name_account_mismatch",
           "current_queue": "repair",
-          "status": "in_flight",
+          "status": "pending",
           "worked_by": null,
           "confidence": null,
           "proposed_action": null,
@@ -39,12 +39,15 @@
           "touch_count": 0,
           "cycle_time": null
         },
-        "fixture_metadata": {
-          "demo_role": "hero_auto_resolve",
+        "gate_context": {
+          "sanctions_status": "clear",
           "first_time_counterparty": false,
-          "sanctions_flag": "clear",
-          "received_at": "2026-08-07T08:18"
-        }
+          "same_day_beneficiary_total_usd": 84500.0,
+          "cross_border": false,
+          "evaluated_at": "2026-08-07T08:18:00-04:00",
+          "cutoff_at": "2026-08-07T17:00:00-04:00"
+        },
+        "demo_role": "hero_auto_resolve"
       },
       "evaluationCriterias": {
         "HeroOutputEvaluator": {
@@ -62,6 +65,49 @@
               "counterparty_history"
             ]
           }
+        },
+        "ExactHeroOutputEvaluator": {
+          "expectedOutput": {
+            "outcome": "RESOLVED",
+            "proposed_action": {
+              "field": "beneficiary_name",
+              "current_value": "PACIFIC STEEL & SUPPY",
+              "proposed_value": "PACIFIC STEEL & SUPPLY"
+            },
+            "confidence": 0.94,
+            "evidence": [
+              {
+                "case_id": "WIRE-8802",
+                "type": "sanctions",
+                "source": "stub://sanctions-screening",
+                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-8802\", \"status\": \"clear\"}",
+                "produced_by": "sanctions",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-8802",
+                "type": "lookup",
+                "source": "stub://core-account-lookup",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"match_status\": \"exact\"}",
+                "produced_by": "account_lookup",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-8802",
+                "type": "history_match",
+                "source": "stub://counterparty-history",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"history_confidence\": 0.94, \"last_applied_fix\": \"expand_truncated_account\", \"times_repaired\": 11, \"times_seen\": 31}",
+                "produced_by": "counterparty_history",
+                "timestamp": "2026-08-07T09:00:00Z"
+              }
+            ],
+            "reasoning_summary": "Prior successful payments confirm the registered beneficiary name for the unchanged account.",
+            "tools_called": [
+              "sanctions",
+              "account_lookup",
+              "counterparty_history"
+            ]
+          }
         }
       }
     },
@@ -69,8 +115,7 @@
       "id": "hero-wire-8841-account-repair",
       "name": "WIRE-8841 proposes the account repair but preserves the G1 approval boundary",
       "inputs": {
-        "case_id": "WIRE-8841",
-        "payment": {
+        "payment_case": {
           "case_id": "WIRE-8841",
           "rail": "Fedwire",
           "direction": "outbound",
@@ -89,7 +134,7 @@
           "exception_code": "EX-01",
           "exception_type": "beneficiary_account_not_found",
           "current_queue": "repair",
-          "status": "in_flight",
+          "status": "pending",
           "worked_by": null,
           "confidence": null,
           "proposed_action": null,
@@ -97,12 +142,15 @@
           "touch_count": 0,
           "cycle_time": null
         },
-        "fixture_metadata": {
-          "demo_role": "hero_gate_blocked",
+        "gate_context": {
+          "sanctions_status": "clear",
           "first_time_counterparty": false,
-          "sanctions_flag": "clear",
-          "received_at": "2026-08-07T08:56"
-        }
+          "same_day_beneficiary_total_usd": 2450000.0,
+          "cross_border": false,
+          "evaluated_at": "2026-08-07T08:56:00-04:00",
+          "cutoff_at": "2026-08-07T17:00:00-04:00"
+        },
+        "demo_role": "hero_gate_blocked"
       },
       "evaluationCriterias": {
         "HeroOutputEvaluator": {
@@ -120,6 +168,49 @@
               "counterparty_history"
             ]
           }
+        },
+        "ExactHeroOutputEvaluator": {
+          "expectedOutput": {
+            "outcome": "BLOCKED_POLICY",
+            "proposed_action": {
+              "field": "beneficiary_account",
+              "current_value": "882300441",
+              "proposed_value": "8823004417"
+            },
+            "confidence": 0.91,
+            "evidence": [
+              {
+                "case_id": "WIRE-8841",
+                "type": "sanctions",
+                "source": "stub://sanctions-screening",
+                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-8841\", \"status\": \"clear\"}",
+                "produced_by": "sanctions",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-8841",
+                "type": "lookup",
+                "source": "stub://core-account-lookup",
+                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"882300441\"}",
+                "produced_by": "account_lookup",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-8841",
+                "type": "history_match",
+                "source": "stub://counterparty-history",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"history_confidence\": 0.94, \"last_applied_fix\": \"expand_truncated_account\", \"times_repaired\": 11, \"times_seen\": 31}",
+                "produced_by": "counterparty_history",
+                "timestamp": "2026-08-07T09:00:00Z"
+              }
+            ],
+            "reasoning_summary": "History identifies the expanded account, but changing a beneficiary account requires the authoritative deterministic G1 gate and human approval.",
+            "tools_called": [
+              "sanctions",
+              "account_lookup",
+              "counterparty_history"
+            ]
+          }
         }
       }
     },
@@ -127,8 +218,7 @@
       "id": "bounded-exhaustion-retains-trace",
       "name": "Unsupported evidence path exhausts its bounded investigation",
       "inputs": {
-        "case_id": "WIRE-SMOKE-EXHAUSTED",
-        "payment": {
+        "payment_case": {
           "case_id": "WIRE-SMOKE-EXHAUSTED",
           "rail": "Fedwire",
           "direction": "outbound",
@@ -147,7 +237,7 @@
           "exception_code": "EX-99",
           "exception_type": "unsupported_smoke_exception",
           "current_queue": "repair",
-          "status": "in_flight",
+          "status": "pending",
           "worked_by": null,
           "confidence": null,
           "proposed_action": null,
@@ -155,12 +245,15 @@
           "touch_count": 0,
           "cycle_time": null
         },
-        "fixture_metadata": {
-          "demo_role": "bounded_exhaustion",
+        "gate_context": {
+          "sanctions_status": "clear",
           "first_time_counterparty": true,
-          "sanctions_flag": "clear",
-          "received_at": "2026-08-07T09:00"
-        }
+          "same_day_beneficiary_total_usd": 1000.0,
+          "cross_border": false,
+          "evaluated_at": "2026-08-07T09:00:00-04:00",
+          "cutoff_at": "2026-08-07T17:00:00-04:00"
+        },
+        "demo_role": "bounded_exhaustion"
       },
       "evaluationCriterias": {
         "HeroOutputEvaluator": {
@@ -168,6 +261,126 @@
             "outcome": "EXHAUSTED",
             "proposed_action": null,
             "confidence": 0.0,
+            "tools_called": [
+              "sanctions",
+              "account_lookup",
+              "counterparty_history",
+              "documents",
+              "sanctions",
+              "account_lookup",
+              "counterparty_history",
+              "documents",
+              "sanctions",
+              "account_lookup",
+              "counterparty_history",
+              "documents"
+            ]
+          }
+        },
+        "ExactHeroOutputEvaluator": {
+          "expectedOutput": {
+            "outcome": "EXHAUSTED",
+            "proposed_action": null,
+            "confidence": 0.0,
+            "evidence": [
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "sanctions",
+                "source": "stub://sanctions-screening",
+                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
+                "produced_by": "sanctions",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "lookup",
+                "source": "stub://core-account-lookup",
+                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
+                "produced_by": "account_lookup",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "history_match",
+                "source": "stub://counterparty-history",
+                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": []}",
+                "produced_by": "counterparty_history",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "document",
+                "source": "stub://document-store",
+                "content": "{\"documents\": [], \"status\": \"not_required\"}",
+                "produced_by": "documents",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "sanctions",
+                "source": "stub://sanctions-screening",
+                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
+                "produced_by": "sanctions",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "lookup",
+                "source": "stub://core-account-lookup",
+                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
+                "produced_by": "account_lookup",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "history_match",
+                "source": "stub://counterparty-history",
+                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": []}",
+                "produced_by": "counterparty_history",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "document",
+                "source": "stub://document-store",
+                "content": "{\"documents\": [], \"status\": \"not_required\"}",
+                "produced_by": "documents",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "sanctions",
+                "source": "stub://sanctions-screening",
+                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
+                "produced_by": "sanctions",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "lookup",
+                "source": "stub://core-account-lookup",
+                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
+                "produced_by": "account_lookup",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "history_match",
+                "source": "stub://counterparty-history",
+                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": []}",
+                "produced_by": "counterparty_history",
+                "timestamp": "2026-08-07T09:00:00Z"
+              },
+              {
+                "case_id": "WIRE-SMOKE-EXHAUSTED",
+                "type": "document",
+                "source": "stub://document-store",
+                "content": "{\"documents\": [], \"status\": \"not_required\"}",
+                "produced_by": "documents",
+                "timestamp": "2026-08-07T09:00:00Z"
+              }
+            ],
+            "reasoning_summary": "Repair investigation exhausted its token budget after 3 iterations; the full read-only trace is preserved.",
             "tools_called": [
               "sanctions",
               "account_lookup",

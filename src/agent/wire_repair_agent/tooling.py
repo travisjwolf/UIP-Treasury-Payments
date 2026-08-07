@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import Any, Mapping, Protocol, runtime_checkable
+from typing import Any, Literal, Mapping, Protocol, runtime_checkable
+
+
+EvidenceType = Literal[
+    "lookup",
+    "history_match",
+    "sanctions",
+    "document",
+    "call_transcript",
+]
 
 
 class PaymentCaseLike(Protocol):
@@ -14,7 +23,7 @@ class PaymentCaseLike(Protocol):
 @dataclass(frozen=True)
 class EvidenceRecord:
     case_id: str
-    type: str
+    type: EvidenceType
     source: str
     content: str
     produced_by: str
@@ -47,7 +56,7 @@ class StubRepairTools:
         case: PaymentCaseLike,
         *,
         tool_name: str,
-        evidence_type: str,
+        evidence_type: EvidenceType,
         source: str,
         data: Mapping[str, Any],
     ) -> ToolResult:

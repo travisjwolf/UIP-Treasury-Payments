@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -42,7 +41,9 @@ async def test_counterparty_history_evidence_contains_known_beneficiary():
 
 @pytest.mark.anyio
 async def test_counterparty_history_does_not_cross_customer_boundaries():
-    unrelated_case = replace(load_case("WIRE-8802"), customer_id="CUST-9999")
+    unrelated_case = load_case("WIRE-8802").model_copy(
+        update={"customer_id": "CUST-9999"}
+    )
 
     result = await StubRepairTools().counterparty_history(unrelated_case)
 
@@ -98,5 +99,13 @@ def test_stub_toolset_implements_a_read_only_protocol():
     tools = StubRepairTools()
 
     assert isinstance(tools, RepairTools)
-    for write_operation in ("apply", "release", "update_payment", "write_payment"):
-        assert not hasattr(tools, write_operation)
+    assert {
+        name
+        for name in dir(tools)
+        if not name.startswith("_") and callable(getattr(tools, name))
+    } == {
+        "account_lookup",
+        "counterparty_history",
+        "documents",
+        "sanctions",
+    }

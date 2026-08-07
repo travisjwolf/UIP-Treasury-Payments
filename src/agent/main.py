@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, Literal, Self
 
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, Field, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
-from wire_repair_agent import StubRepairTools, analyze_fixture
+from wire_repair_agent import EvidenceType, StubRepairTools, analyze_fixture
 
 
 AgentOutcome = Literal[
@@ -16,55 +26,139 @@ AgentOutcome = Literal[
     "EXHAUSTED",
     "BLOCKED_POLICY",
 ]
+ProposedField = Literal[
+    "amount_usd",
+    "beneficiary_account",
+    "beneficiary_bank_aba",
+    "beneficiary_name",
+    "currency",
+    "customer_name",
+    "remittance_info",
+]
+SanctionsStatus = Literal["clear", "review", "match", "unknown"]
+ScalarValue = StrictStr | StrictInt | StrictFloat
 
 
-class ProposedActionOutput(BaseModel):
-    field: str = Field(
-        min_length=1,
-        description="Payment field that the agent proposes changing.",
+class ContractModel(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        str_strip_whitespace=True,
+        validate_assignment=True,
     )
-    current_value: str = Field(
-        min_length=1,
-        description="Value currently present on the payment.",
+
+
+class ProposedActionOutput(ContractModel):
+    field: ProposedField = Field(
+        description="Payment field that the agent proposes changing."
     )
-    proposed_value: str = Field(
+    current_value: ScalarValue = Field(
+        description="Value currently present on the payment."
+    )
+    proposed_value: ScalarValue = Field(
+        description="Replacement value copied from cited read-only evidence."
+    )
+
+    @model_validator(mode="after")
+    def proposed_value_must_change(self) -> Self:
+        if self.current_value == self.proposed_value:
+            raise ValueError("proposed_value must differ from current_value")
+        if isinstance(self.proposed_value, str) and not self.proposed_value:
+            raise ValueError("proposed_value must not be blank")
+        return self
+
+
+class EvidenceOutput(ContractModel):
+    case_id: str = Field(
         min_length=1,
-        description="Replacement value copied from cited read-only evidence.",
+        description="Wire-repair case identifier for this evidence.",
+    )
+    type: EvidenceType = Field(
+        description="Closed evidence category produced by a read-only source."
+    )
+    source: str = Field(
+        min_length=1,
+        description="Read-only source URI that produced the evidence.",
+    )
+    content: dict[str, Any] | str = Field(
+        description="Canonical payload returned by the evidence source."
+    )
+    produced_by: str = Field(
+        min_length=1,
+        description="Read-only tool that produced this record.",
+    )
+    timestamp: AwareDatetime = Field(
+        description="ISO-8601 timestamp assigned to the evidence."
     )
 
 
-class EvidenceOutput(BaseModel):
-    case_id: str = Field(description="Wire-repair case identifier for this evidence.")
-    type: str = Field(description="Evidence category, such as lookup or history_match.")
-    source: str = Field(description="Read-only source URI that produced the evidence.")
-    content: str = Field(description="Canonical JSON payload returned by the source.")
-    produced_by: str = Field(description="Read-only tool that produced this record.")
-    timestamp: str = Field(description="ISO-8601 timestamp assigned to the evidence.")
-
-
-class PaymentInput(BaseModel):
-    case_id: str = Field(description="Unique wire-repair case identifier.")
-    rail: str = Field(description="Payment rail, such as Fedwire.")
-    direction: str = Field(description="Inbound or outbound payment direction.")
+class PaymentInput(ContractModel):
+    case_id: str = Field(
+        min_length=1,
+        description="Unique wire-repair case identifier.",
+    )
+    rail: str = Field(min_length=1, description="Payment rail, such as Fedwire.")
+    direction: Literal["outbound", "inbound"] = Field(
+        description="Inbound or outbound payment direction."
+    )
     amount_usd: float = Field(gt=0, description="Payment amount normalized to USD.")
-    currency: str = Field(description="ISO currency code on the payment.")
-    value_date: str = Field(description="Payment value date in YYYY-MM-DD format.")
-    cutoff_time: str = Field(description="Applicable rail cutoff time in HH:MM format.")
-    sla_deadline: str | None = Field(description="Optional processing SLA deadline.")
-    source_channel: str = Field(description="Channel through which the wire originated.")
-    customer_id: str = Field(description="Commercial customer identifier.")
-    customer_name: str = Field(description="Commercial customer display name.")
-    beneficiary_name: str = Field(description="Beneficiary name currently on the wire.")
+    currency: str = Field(
+        pattern=r"^[A-Z]{3}$",
+        description="Three-letter ISO currency code on the payment.",
+    )
+    value_date: date = Field(description="Payment value date in YYYY-MM-DD format.")
+    cutoff_time: str = Field(
+        pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$",
+        description="Applicable rail cutoff time in HH:MM format.",
+    )
+    sla_deadline: AwareDatetime | None = Field(
+        default=None,
+        description="Optional processing SLA deadline.",
+    )
+    source_channel: str = Field(
+        min_length=1,
+        description="Channel through which the wire originated.",
+    )
+    customer_id: str = Field(
+        min_length=1,
+        description="Commercial customer identifier.",
+    )
+    customer_name: str = Field(
+        min_length=1,
+        description="Commercial customer display name.",
+    )
+    beneficiary_name: str = Field(
+        min_length=1,
+        description="Beneficiary name currently on the wire.",
+    )
     beneficiary_account: str = Field(
+        min_length=1,
         description="Beneficiary account currently on the wire."
     )
-    beneficiary_bank_aba: str = Field(description="Beneficiary bank ABA routing number.")
+    beneficiary_bank_aba: str = Field(
+        min_length=1,
+        description="Beneficiary bank ABA routing number.",
+    )
     remittance_info: str = Field(description="Wire remittance or invoice information.")
-    exception_code: str = Field(description="Intake exception code requiring repair.")
-    exception_type: str = Field(description="Human-readable intake exception category.")
-    current_queue: str | None = Field(description="Current operations queue, if assigned.")
-    status: str | None = Field(description="Current payment-processing status.")
-    worked_by: str | None = Field(description="Current analyst or automation owner.")
+    exception_code: str = Field(
+        pattern=r"^EX-\d{2}$",
+        description="Intake exception code requiring repair.",
+    )
+    exception_type: str = Field(
+        min_length=1,
+        description="Human-readable intake exception category.",
+    )
+    current_queue: str = Field(
+        min_length=1,
+        description="Current operations queue.",
+    )
+    status: str = Field(
+        min_length=1,
+        description="Current payment-processing status.",
+    )
+    worked_by: str | None = Field(
+        default=None,
+        description="Current analyst or automation owner.",
+    )
     confidence: float | None = Field(
         default=None,
         ge=0,
@@ -79,8 +173,8 @@ class PaymentInput(BaseModel):
         default=None,
         description="Existing closed-set repair outcome, when already assigned.",
     )
-    touch_count: int | None = Field(
-        default=None,
+    touch_count: int = Field(
+        default=0,
         ge=0,
         description="Number of prior human or automation touches.",
     )
@@ -91,43 +185,42 @@ class PaymentInput(BaseModel):
     )
 
 
-class FixtureMetadataInput(BaseModel):
-    demo_role: str | None = Field(
-        default=None,
-        description="Synthetic-fixture role used to organize the demo.",
+class GateContextInput(ContractModel):
+    sanctions_status: SanctionsStatus = Field(
+        description="Current sanctions-screening result for deterministic gate G0."
     )
-    first_time_counterparty: bool | None = Field(
-        default=None,
-        description="Whether this is the customer's first payment to the counterparty.",
+    first_time_counterparty: bool = Field(
+        description="Whether this is the customer's first payment to the counterparty."
     )
-    sanctions_flag: str | None = Field(
-        default=None,
-        description="Synthetic sanctions-screening setup for the fixture.",
+    same_day_beneficiary_total_usd: float = Field(
+        ge=0,
+        description="Same-day USD total used by the deterministic velocity gate.",
     )
-    received_at: str | None = Field(
-        default=None,
-        description="ISO-8601 time at which the repair case was received.",
+    cross_border: bool = Field(
+        description="Whether the payment crosses a national border."
+    )
+    evaluated_at: AwareDatetime = Field(
+        description="ISO-8601 time at which the gate context was evaluated."
+    )
+    cutoff_at: AwareDatetime = Field(
+        description="ISO-8601 payment-rail cutoff timestamp."
     )
 
 
-class Input(BaseModel):
-    case_id: str = Field(description="Wire-repair case identifier to investigate.")
-    payment: PaymentInput = Field(
+class Input(ContractModel):
+    payment_case: PaymentInput = Field(
         description="Typed payment record supplied by the repair queue."
     )
-    fixture_metadata: FixtureMetadataInput = Field(
-        default_factory=FixtureMetadataInput,
-        description="Optional synthetic context used by the hackathon demo.",
+    gate_context: GateContextInput = Field(
+        description="Typed context reserved for the separate deterministic gate layer."
+    )
+    demo_role: str | None = Field(
+        default=None,
+        description="Optional synthetic role used to organize hackathon demo cases.",
     )
 
-    @model_validator(mode="after")
-    def require_matching_case_ids(self) -> Self:
-        if self.case_id != self.payment.case_id:
-            raise ValueError("case_id must match payment.case_id")
-        return self
 
-
-class Output(BaseModel):
+class Output(ContractModel):
     outcome: AgentOutcome = Field(
         description="Closed-set repair outcome returned to orchestration."
     )
@@ -143,20 +236,24 @@ class Output(BaseModel):
         description="Cumulative read-only evidence trace supporting the result."
     )
     reasoning_summary: str = Field(
-        min_length=1,
         description="Concise explanation of the evidence and control boundary.",
     )
     tools_called: list[str] = Field(
         description="Read-only tools called, in execution order."
     )
 
+    @model_validator(mode="after")
+    def resolved_outcome_requires_a_proposal(self) -> Self:
+        if self.outcome in {"RESOLVED", "RESOLVED_LOW_CONFIDENCE"}:
+            if self.proposed_action is None:
+                raise ValueError("resolved outcomes require proposed_action")
+        return self
 
-class State(BaseModel):
-    case_id: str
-    payment: PaymentInput
-    fixture_metadata: FixtureMetadataInput = Field(
-        default_factory=FixtureMetadataInput
-    )
+
+class State(ContractModel):
+    payment_case: PaymentInput
+    gate_context: GateContextInput
+    demo_role: str | None = None
     outcome: AgentOutcome | None = None
     proposed_action: ProposedActionOutput | None = None
     confidence: float | None = None
@@ -167,9 +264,9 @@ class State(BaseModel):
 
 async def investigate_and_propose(state: State) -> dict[str, Any]:
     fixture = {
-        "case_id": state.case_id,
-        "payment": state.payment.model_dump(mode="json"),
-        "fixture_metadata": state.fixture_metadata.model_dump(mode="json"),
+        "payment_case": state.payment_case.model_dump(mode="json"),
+        "gate_context": state.gate_context.model_dump(mode="json"),
+        "demo_role": state.demo_role,
     }
     return await analyze_fixture(fixture, StubRepairTools())
 

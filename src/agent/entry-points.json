@@ -4,30 +4,32 @@
     "entryPoints": [
         {
             "filePath": "agent",
-            "uniqueId": "72215225-ad89-44e0-b111-4656222c56fb",
+            "uniqueId": "9e146cac-a494-4c09-bc07-b40e2bb4e428",
             "type": "agent",
             "input": {
                 "type": "object",
                 "properties": {
-                    "case_id": {
-                        "description": "Wire-repair case identifier to investigate.",
-                        "title": "Case Id",
-                        "type": "string"
-                    },
-                    "payment": {
+                    "payment_case": {
+                        "additionalProperties": false,
                         "properties": {
                             "case_id": {
                                 "description": "Unique wire-repair case identifier.",
+                                "minLength": 1,
                                 "title": "Case Id",
                                 "type": "string"
                             },
                             "rail": {
                                 "description": "Payment rail, such as Fedwire.",
+                                "minLength": 1,
                                 "title": "Rail",
                                 "type": "string"
                             },
                             "direction": {
                                 "description": "Inbound or outbound payment direction.",
+                                "enum": [
+                                    "outbound",
+                                    "inbound"
+                                ],
                                 "title": "Direction",
                                 "type": "string"
                             },
@@ -38,50 +40,68 @@
                                 "type": "number"
                             },
                             "currency": {
-                                "description": "ISO currency code on the payment.",
+                                "description": "Three-letter ISO currency code on the payment.",
+                                "pattern": "^[A-Z]{3}$",
                                 "title": "Currency",
                                 "type": "string"
                             },
                             "value_date": {
                                 "description": "Payment value date in YYYY-MM-DD format.",
+                                "format": "date",
                                 "title": "Value Date",
                                 "type": "string"
                             },
                             "cutoff_time": {
                                 "description": "Applicable rail cutoff time in HH:MM format.",
+                                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?$",
                                 "title": "Cutoff Time",
                                 "type": "string"
                             },
                             "sla_deadline": {
-                                "type": "string"
+                                "anyOf": [
+                                    {
+                                        "format": "date-time",
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ],
+                                "description": "Optional processing SLA deadline."
                             },
                             "source_channel": {
                                 "description": "Channel through which the wire originated.",
+                                "minLength": 1,
                                 "title": "Source Channel",
                                 "type": "string"
                             },
                             "customer_id": {
                                 "description": "Commercial customer identifier.",
+                                "minLength": 1,
                                 "title": "Customer Id",
                                 "type": "string"
                             },
                             "customer_name": {
                                 "description": "Commercial customer display name.",
+                                "minLength": 1,
                                 "title": "Customer Name",
                                 "type": "string"
                             },
                             "beneficiary_name": {
                                 "description": "Beneficiary name currently on the wire.",
+                                "minLength": 1,
                                 "title": "Beneficiary Name",
                                 "type": "string"
                             },
                             "beneficiary_account": {
                                 "description": "Beneficiary account currently on the wire.",
+                                "minLength": 1,
                                 "title": "Beneficiary Account",
                                 "type": "string"
                             },
                             "beneficiary_bank_aba": {
                                 "description": "Beneficiary bank ABA routing number.",
+                                "minLength": 1,
                                 "title": "Beneficiary Bank Aba",
                                 "type": "string"
                             },
@@ -92,75 +112,153 @@
                             },
                             "exception_code": {
                                 "description": "Intake exception code requiring repair.",
+                                "pattern": "^EX-\\d{2}$",
                                 "title": "Exception Code",
                                 "type": "string"
                             },
                             "exception_type": {
                                 "description": "Human-readable intake exception category.",
+                                "minLength": 1,
                                 "title": "Exception Type",
                                 "type": "string"
                             },
                             "current_queue": {
+                                "description": "Current operations queue.",
+                                "minLength": 1,
+                                "title": "Current Queue",
                                 "type": "string"
                             },
                             "status": {
+                                "description": "Current payment-processing status.",
+                                "minLength": 1,
+                                "title": "Status",
                                 "type": "string"
                             },
                             "worked_by": {
-                                "type": "string"
+                                "anyOf": [
+                                    {
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ],
+                                "description": "Current analyst or automation owner."
                             },
                             "confidence": {
-                                "maximum": 1,
-                                "minimum": 0,
-                                "type": "number"
+                                "anyOf": [
+                                    {
+                                        "maximum": 1,
+                                        "minimum": 0,
+                                        "type": "number"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ],
+                                "description": "Existing repair confidence, when already calculated."
                             },
                             "proposed_action": {
-                                "properties": {
-                                    "field": {
-                                        "description": "Payment field that the agent proposes changing.",
-                                        "minLength": 1,
-                                        "title": "Field",
-                                        "type": "string"
+                                "anyOf": [
+                                    {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "field": {
+                                                "description": "Payment field that the agent proposes changing.",
+                                                "enum": [
+                                                    "amount_usd",
+                                                    "beneficiary_account",
+                                                    "beneficiary_bank_aba",
+                                                    "beneficiary_name",
+                                                    "currency",
+                                                    "customer_name",
+                                                    "remittance_info"
+                                                ],
+                                                "title": "Field",
+                                                "type": "string"
+                                            },
+                                            "current_value": {
+                                                "anyOf": [
+                                                    {
+                                                        "type": "string"
+                                                    },
+                                                    {
+                                                        "type": "integer"
+                                                    },
+                                                    {
+                                                        "type": "number"
+                                                    }
+                                                ],
+                                                "description": "Value currently present on the payment.",
+                                                "title": "Current Value"
+                                            },
+                                            "proposed_value": {
+                                                "anyOf": [
+                                                    {
+                                                        "type": "string"
+                                                    },
+                                                    {
+                                                        "type": "integer"
+                                                    },
+                                                    {
+                                                        "type": "number"
+                                                    }
+                                                ],
+                                                "description": "Replacement value copied from cited read-only evidence.",
+                                                "title": "Proposed Value"
+                                            }
+                                        },
+                                        "required": [
+                                            "field",
+                                            "current_value",
+                                            "proposed_value"
+                                        ],
+                                        "title": "ProposedActionOutput",
+                                        "type": "object"
                                     },
-                                    "current_value": {
-                                        "description": "Value currently present on the payment.",
-                                        "minLength": 1,
-                                        "title": "Current Value",
-                                        "type": "string"
-                                    },
-                                    "proposed_value": {
-                                        "description": "Replacement value copied from cited read-only evidence.",
-                                        "minLength": 1,
-                                        "title": "Proposed Value",
-                                        "type": "string"
+                                    {
+                                        "type": "null"
                                     }
-                                },
-                                "required": [
-                                    "field",
-                                    "current_value",
-                                    "proposed_value"
                                 ],
-                                "title": "ProposedActionOutput",
-                                "type": "object"
+                                "description": "Existing proposed action, when already calculated."
                             },
                             "outcome": {
-                                "enum": [
-                                    "RESOLVED",
-                                    "RESOLVED_LOW_CONFIDENCE",
-                                    "AMBIGUOUS",
-                                    "NEEDS_INFO",
-                                    "EXHAUSTED",
-                                    "BLOCKED_POLICY"
+                                "anyOf": [
+                                    {
+                                        "enum": [
+                                            "RESOLVED",
+                                            "RESOLVED_LOW_CONFIDENCE",
+                                            "AMBIGUOUS",
+                                            "NEEDS_INFO",
+                                            "EXHAUSTED",
+                                            "BLOCKED_POLICY"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
                                 ],
-                                "type": "string"
+                                "description": "Existing closed-set repair outcome, when already assigned."
                             },
                             "touch_count": {
+                                "default": 0,
+                                "description": "Number of prior human or automation touches.",
                                 "minimum": 0,
+                                "title": "Touch Count",
                                 "type": "integer"
                             },
                             "cycle_time": {
-                                "minimum": 0,
-                                "type": "number"
+                                "anyOf": [
+                                    {
+                                        "minimum": 0,
+                                        "type": "number"
+                                    },
+                                    {
+                                        "type": "null"
+                                    }
+                                ],
+                                "description": "Elapsed repair cycle time, when available."
                             }
                         },
                         "required": [
@@ -171,7 +269,6 @@
                             "currency",
                             "value_date",
                             "cutoff_time",
-                            "sla_deadline",
                             "source_channel",
                             "customer_id",
                             "customer_name",
@@ -182,35 +279,84 @@
                             "exception_code",
                             "exception_type",
                             "current_queue",
-                            "status",
-                            "worked_by"
+                            "status"
                         ],
                         "title": "PaymentInput",
-                        "type": "object"
+                        "type": "object",
+                        "description": "Typed payment record supplied by the repair queue."
                     },
-                    "fixture_metadata": {
+                    "gate_context": {
+                        "additionalProperties": false,
                         "properties": {
-                            "demo_role": {
+                            "sanctions_status": {
+                                "description": "Current sanctions-screening result for deterministic gate G0.",
+                                "enum": [
+                                    "clear",
+                                    "review",
+                                    "match",
+                                    "unknown"
+                                ],
+                                "title": "Sanctions Status",
                                 "type": "string"
                             },
                             "first_time_counterparty": {
+                                "description": "Whether this is the customer's first payment to the counterparty.",
+                                "title": "First Time Counterparty",
                                 "type": "boolean"
                             },
-                            "sanctions_flag": {
+                            "same_day_beneficiary_total_usd": {
+                                "description": "Same-day USD total used by the deterministic velocity gate.",
+                                "minimum": 0,
+                                "title": "Same Day Beneficiary Total Usd",
+                                "type": "number"
+                            },
+                            "cross_border": {
+                                "description": "Whether the payment crosses a national border.",
+                                "title": "Cross Border",
+                                "type": "boolean"
+                            },
+                            "evaluated_at": {
+                                "description": "ISO-8601 time at which the gate context was evaluated.",
+                                "format": "date-time",
+                                "title": "Evaluated At",
                                 "type": "string"
                             },
-                            "received_at": {
+                            "cutoff_at": {
+                                "description": "ISO-8601 payment-rail cutoff timestamp.",
+                                "format": "date-time",
+                                "title": "Cutoff At",
                                 "type": "string"
                             }
                         },
-                        "title": "FixtureMetadataInput",
-                        "type": "object"
+                        "required": [
+                            "sanctions_status",
+                            "first_time_counterparty",
+                            "same_day_beneficiary_total_usd",
+                            "cross_border",
+                            "evaluated_at",
+                            "cutoff_at"
+                        ],
+                        "title": "GateContextInput",
+                        "type": "object",
+                        "description": "Typed context reserved for the separate deterministic gate layer."
+                    },
+                    "demo_role": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "description": "Optional synthetic role used to organize hackathon demo cases."
                     }
                 },
                 "required": [
-                    "case_id",
-                    "payment"
-                ]
+                    "payment_case",
+                    "gate_context"
+                ],
+                "additionalProperties": false
             },
             "output": {
                 "type": "object",
@@ -229,33 +375,68 @@
                         "type": "string"
                     },
                     "proposed_action": {
-                        "properties": {
-                            "field": {
-                                "description": "Payment field that the agent proposes changing.",
-                                "minLength": 1,
-                                "title": "Field",
-                                "type": "string"
+                        "anyOf": [
+                            {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "field": {
+                                        "description": "Payment field that the agent proposes changing.",
+                                        "enum": [
+                                            "amount_usd",
+                                            "beneficiary_account",
+                                            "beneficiary_bank_aba",
+                                            "beneficiary_name",
+                                            "currency",
+                                            "customer_name",
+                                            "remittance_info"
+                                        ],
+                                        "title": "Field",
+                                        "type": "string"
+                                    },
+                                    "current_value": {
+                                        "anyOf": [
+                                            {
+                                                "type": "string"
+                                            },
+                                            {
+                                                "type": "integer"
+                                            },
+                                            {
+                                                "type": "number"
+                                            }
+                                        ],
+                                        "description": "Value currently present on the payment.",
+                                        "title": "Current Value"
+                                    },
+                                    "proposed_value": {
+                                        "anyOf": [
+                                            {
+                                                "type": "string"
+                                            },
+                                            {
+                                                "type": "integer"
+                                            },
+                                            {
+                                                "type": "number"
+                                            }
+                                        ],
+                                        "description": "Replacement value copied from cited read-only evidence.",
+                                        "title": "Proposed Value"
+                                    }
+                                },
+                                "required": [
+                                    "field",
+                                    "current_value",
+                                    "proposed_value"
+                                ],
+                                "title": "ProposedActionOutput",
+                                "type": "object"
                             },
-                            "current_value": {
-                                "description": "Value currently present on the payment.",
-                                "minLength": 1,
-                                "title": "Current Value",
-                                "type": "string"
-                            },
-                            "proposed_value": {
-                                "description": "Replacement value copied from cited read-only evidence.",
-                                "minLength": 1,
-                                "title": "Proposed Value",
-                                "type": "string"
+                            {
+                                "type": "null"
                             }
-                        },
-                        "required": [
-                            "field",
-                            "current_value",
-                            "proposed_value"
                         ],
-                        "title": "ProposedActionOutput",
-                        "type": "object"
+                        "description": "Evidence-backed repair proposal, or null when none is supportable."
                     },
                     "confidence": {
                         "description": "Confidence in the proposed repair, between zero and one.",
@@ -267,34 +448,54 @@
                     "evidence": {
                         "description": "Cumulative read-only evidence trace supporting the result.",
                         "items": {
+                            "additionalProperties": false,
                             "properties": {
                                 "case_id": {
                                     "description": "Wire-repair case identifier for this evidence.",
+                                    "minLength": 1,
                                     "title": "Case Id",
                                     "type": "string"
                                 },
                                 "type": {
-                                    "description": "Evidence category, such as lookup or history_match.",
+                                    "description": "Closed evidence category produced by a read-only source.",
+                                    "enum": [
+                                        "lookup",
+                                        "history_match",
+                                        "sanctions",
+                                        "document",
+                                        "call_transcript"
+                                    ],
                                     "title": "Type",
                                     "type": "string"
                                 },
                                 "source": {
                                     "description": "Read-only source URI that produced the evidence.",
+                                    "minLength": 1,
                                     "title": "Source",
                                     "type": "string"
                                 },
                                 "content": {
-                                    "description": "Canonical JSON payload returned by the source.",
-                                    "title": "Content",
-                                    "type": "string"
+                                    "anyOf": [
+                                        {
+                                            "additionalProperties": true,
+                                            "type": "object"
+                                        },
+                                        {
+                                            "type": "string"
+                                        }
+                                    ],
+                                    "description": "Canonical payload returned by the evidence source.",
+                                    "title": "Content"
                                 },
                                 "produced_by": {
                                     "description": "Read-only tool that produced this record.",
+                                    "minLength": 1,
                                     "title": "Produced By",
                                     "type": "string"
                                 },
                                 "timestamp": {
                                     "description": "ISO-8601 timestamp assigned to the evidence.",
+                                    "format": "date-time",
                                     "title": "Timestamp",
                                     "type": "string"
                                 }
@@ -315,7 +516,6 @@
                     },
                     "reasoning_summary": {
                         "description": "Concise explanation of the evidence and control boundary.",
-                        "minLength": 1,
                         "title": "Reasoning Summary",
                         "type": "string"
                     },
@@ -335,7 +535,8 @@
                     "evidence",
                     "reasoning_summary",
                     "tools_called"
-                ]
+                ],
+                "additionalProperties": false
             },
             "graph": {
                 "nodes": [

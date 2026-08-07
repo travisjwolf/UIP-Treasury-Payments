@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Awaitable, Callable
 
-from .tooling import RepairTools
+from .tooling import RepairTools, ToolResult
 
 
 @dataclass(frozen=True)
@@ -20,21 +20,45 @@ async def analyze_fixture(
     *,
     limits: AgentLimits = AgentLimits(),
 ) -> dict[str, Any]:
-    case = SimpleNamespace(**fixture["payment"])
-    trace = []
+    payment = fixture.get("payment_case", fixture.get("payment"))
+    if not isinstance(payment, dict):
+        raise ValueError("fixture must contain payment_case")
+    case = SimpleNamespace(**payment)
+    trace: list[ToolResult] = []
     iterations_allowed_by_budget = (
         limits.token_budget // limits.estimated_tokens_per_iteration
     )
     iteration_limit = min(limits.max_iterations, iterations_allowed_by_budget)
 
     for _ in range(iteration_limit):
-        iteration_results = [
-            await tools.sanctions(case),
-            await tools.account_lookup(case),
-            await tools.counterparty_history(case),
-        ]
-        trace.extend(iteration_results)
-        history = iteration_results[-1].data
+        sanctions, failure = await _call_read_tool(
+            case=case,
+            tool_name="sanctions",
+            operation=tools.sanctions,
+            trace=trace,
+        )
+        if failure is not None:
+            return failure
+        account, failure = await _call_read_tool(
+            case=case,
+            tool_name="account_lookup",
+            operation=tools.account_lookup,
+            trace=trace,
+        )
+        if failure is not None:
+            return failure
+        history_result, failure = await _call_read_tool(
+            case=case,
+            tool_name="counterparty_history",
+            operation=tools.counterparty_history,
+            trace=trace,
+        )
+        if failure is not None:
+            return failure
+        assert sanctions is not None
+        assert account is not None
+        assert history_result is not None
+        history = history_result.data
 
         if case.exception_code == "EX-01" and history.get("beneficiary_account"):
             return _output(
@@ -69,7 +93,14 @@ async def analyze_fixture(
                 trace=trace,
             )
 
-        trace.append(await tools.documents(case))
+        _, failure = await _call_read_tool(
+            case=case,
+            tool_name="documents",
+            operation=tools.documents,
+            trace=trace,
+        )
+        if failure is not None:
+            return failure
 
     stop_reason = (
         "token budget"
@@ -88,13 +119,40 @@ async def analyze_fixture(
     )
 
 
+async def _call_read_tool(
+    *,
+    case: Any,
+    tool_name: str,
+    operation: Callable[[Any], Awaitable[ToolResult]],
+    trace: list[ToolResult],
+) -> tuple[ToolResult | None, dict[str, Any] | None]:
+    try:
+        result = await operation(case)
+    except Exception:
+        return None, _output(
+            outcome="NEEDS_INFO",
+            proposed_action=None,
+            confidence=0.0,
+            reasoning_summary=(
+                f"Read-only tool {tool_name} failed; a system retry or human "
+                "investigation is required. Evidence collected before the failure "
+                "is preserved."
+            ),
+            trace=trace,
+            tools_called=[*[item.tool_name for item in trace], tool_name],
+        )
+    trace.append(result)
+    return result, None
+
+
 def _output(
     *,
     outcome: str,
-    proposed_action: dict[str, str] | None,
+    proposed_action: dict[str, Any] | None,
     confidence: float,
     reasoning_summary: str,
-    trace: list[Any],
+    trace: list[ToolResult],
+    tools_called: list[str] | None = None,
 ) -> dict[str, Any]:
     return {
         "outcome": outcome,
@@ -102,5 +160,9 @@ def _output(
         "confidence": confidence,
         "evidence": [asdict(item.evidence) for item in trace],
         "reasoning_summary": reasoning_summary,
-        "tools_called": [item.tool_name for item in trace],
+        "tools_called": (
+            tools_called
+            if tools_called is not None
+            else [item.tool_name for item in trace]
+        ),
     }

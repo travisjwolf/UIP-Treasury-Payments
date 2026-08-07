@@ -24,7 +24,15 @@ def load_fixture(case_id: str) -> dict:
 
 
 def evidence_contains_scalar(output: AgentOutput, value: str) -> bool:
-    return any(value in json.loads(item.content).values() for item in output.evidence)
+    return any(
+        value
+        in (
+            json.loads(item.content).values()
+            if isinstance(item.content, str)
+            else item.content.values()
+        )
+        for item in output.evidence
+    )
 
 
 class NoMatchTools:
@@ -62,6 +70,35 @@ class NoMatchTools:
         )
 
 
+class FailingTools:
+    def __init__(self, fail_on: str, delegate=None):
+        self.fail_on = fail_on
+        self.delegate = delegate or StubRepairTools()
+
+    async def _call(self, tool_name: str, case):
+        if tool_name == self.fail_on:
+            raise RuntimeError("synthetic read-only dependency failure")
+        return await getattr(self.delegate, tool_name)(case)
+
+    async def sanctions(self, case):
+        return await self._call("sanctions", case)
+
+    async def account_lookup(self, case):
+        return await self._call("account_lookup", case)
+
+    async def counterparty_history(self, case):
+        return await self._call("counterparty_history", case)
+
+    async def documents(self, case):
+        return await self._call("documents", case)
+
+
+def with_exception_code(fixture: dict, exception_code: str) -> dict:
+    changed = json.loads(json.dumps(fixture))
+    changed["payment_case"]["exception_code"] = exception_code
+    return changed
+
+
 @pytest.mark.anyio
 async def test_wire_8802_returns_an_evidence_backed_name_repair():
     raw_output = await analyze_fixture(load_fixture("WIRE-8802"), StubRepairTools())
@@ -81,11 +118,11 @@ async def test_wire_8802_returns_an_evidence_backed_name_repair():
     assert output.proposed_action.current_value == "PACIFIC STEEL & SUPPY"
     assert output.proposed_action.proposed_value == "PACIFIC STEEL & SUPPLY"
     assert output.confidence == 0.94
-    assert output.tools_called == (
+    assert output.tools_called == [
         "sanctions",
         "account_lookup",
         "counterparty_history",
-    )
+    ]
     assert evidence_contains_scalar(output, output.proposed_action.proposed_value)
 
 
@@ -100,11 +137,11 @@ async def test_wire_8841_returns_the_deterministic_policy_block_preview():
     assert output.proposed_action.current_value == "882300441"
     assert output.proposed_action.proposed_value == "8823004417"
     assert output.confidence == 0.91
-    assert output.tools_called == (
+    assert output.tools_called == [
         "sanctions",
         "account_lookup",
         "counterparty_history",
-    )
+    ]
     assert evidence_contains_scalar(output, output.proposed_action.proposed_value)
 
 
@@ -124,7 +161,7 @@ async def test_exhaustion_preserves_the_full_bounded_tool_trace():
     assert output.outcome == "EXHAUSTED"
     assert output.proposed_action is None
     assert output.confidence == 0.0
-    assert output.tools_called == (
+    assert output.tools_called == [
         "sanctions",
         "account_lookup",
         "counterparty_history",
@@ -133,6 +170,38 @@ async def test_exhaustion_preserves_the_full_bounded_tool_trace():
         "account_lookup",
         "counterparty_history",
         "documents",
-    )
+    ]
     assert len(output.evidence) == 8
     assert "token budget" in output.reasoning_summary.lower()
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("failed_tool", "successful_tools"),
+    [
+        ("sanctions", []),
+        ("account_lookup", ["sanctions"]),
+        ("counterparty_history", ["sanctions", "account_lookup"]),
+        (
+            "documents",
+            ["sanctions", "account_lookup", "counterparty_history"],
+        ),
+    ],
+)
+async def test_tool_failures_return_a_typed_trace_preserving_outcome(
+    failed_tool: str,
+    successful_tools: list[str],
+):
+    fixture = load_fixture("WIRE-8802")
+    if failed_tool == "documents":
+        fixture = with_exception_code(fixture, "EX-99")
+
+    raw_output = await analyze_fixture(fixture, FailingTools(failed_tool))
+    output = AgentOutput.from_dict(raw_output)
+
+    assert output.outcome == "NEEDS_INFO"
+    assert output.proposed_action is None
+    assert output.confidence == 0.0
+    assert output.tools_called == [*successful_tools, failed_tool]
+    assert len(output.evidence) == len(successful_tools)
+    assert failed_tool in output.reasoning_summary
