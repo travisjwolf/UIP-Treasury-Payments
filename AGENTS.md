@@ -23,6 +23,7 @@ AGENTS.md                                  this file
 README.md                                  orientation for humans
 docs/PDD-wire-repair.md                    the process, grounded in customer discovery
 docs/exception-taxonomy-and-gates.md       exception types, typed outcomes, gate list
+docs/three-instance-build-plan.md          Alpha / Bravo / Charlie ownership and merge plan
 docs/business-case-skeleton.md             not needed for the build
 fixtures/payments.csv                      40 payment cases
 fixtures/counterparty_history.csv          prior repair history the agent reasons over
@@ -31,6 +32,20 @@ scripts/generate_fixtures.py               regenerate or expand the fixtures
 ```
 
 Everything built on the day goes under `src/`. Do not create it before the build day starts.
+
+---
+
+## Three-instance role dispatch
+
+The implementation uses three persistent branches: `alpha`, `bravo`, and `charlie`. Their ownership, checkpoints, and merge order are defined in `docs/three-instance-build-plan.md`.
+
+If the user's prompt is only `Alpha`, `Bravo`, or `Charlie`, treat that name as the instruction to execute the next incomplete checkpoint for that role. Before editing:
+
+1. Fetch `origin` and verify that the checked-out branch is the lowercase form of the role name.
+2. Read this file, `docs/PDD-wire-repair.md`, `docs/exception-taxonomy-and-gates.md`, and `docs/three-instance-build-plan.md`.
+3. Confirm that every required upstream checkpoint is present on the branch. Bravo and Charlie may not write implementation code until Alpha's contract checkpoint is merged into `main` and incorporated into their branches.
+4. Work only inside the role's owned paths. Stop and request a handoff instead of editing another role's files.
+5. Run the role's exit checks, make focused commits to the role branch, and push that branch. Never commit implementation work directly to `main`, and never merge another role's branch without its exit evidence.
 
 ---
 
