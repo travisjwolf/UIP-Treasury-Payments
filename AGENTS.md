@@ -45,7 +45,10 @@ If the user's prompt is only `Alpha`, `Bravo`, or `Charlie`, treat that name as 
 2. Read this file, `docs/PDD-wire-repair.md`, `docs/exception-taxonomy-and-gates.md`, and `docs/three-instance-build-plan.md`.
 3. Confirm that every required upstream checkpoint is present on the branch. Bravo and Charlie may not write implementation code until Alpha's contract checkpoint is merged into `main` and incorporated into their branches.
 4. Work only inside the role's owned paths. Stop and request a handoff instead of editing another role's files.
-5. Run the role's exit checks, make focused commits to the role branch, and push that branch. Never commit implementation work directly to `main`, and never merge another role's branch without its exit evidence.
+5. Treat the ownership matrix as exclusive: do not edit, delete, rename, regenerate, or reformat another role's paths. Shared-file changes require an explicit handoff recorded in the checkpoint report.
+6. Run the role's exit checks, make focused commits to the role branch, and push that branch. Never commit implementation work directly to `main`, and never merge another role's branch without its exit evidence.
+7. Use only non-destructive Git operations. Never terminate another worker or process, delete another worker's worktree, use `git reset --hard`, overwrite uncommitted work, force-push, or rewrite shared history. If synchronization conflicts, stop and report the conflict.
+8. Merge completed work into `main` only through the documented reviewed merge sequence. Preserve every completed commit and announce the merge SHA before the next role proceeds.
 
 ---
 

@@ -19,7 +19,10 @@
 - No live telephony. `WIRE-8877` uses a prerecorded transcript or audio fixture and preserves the human decision.
 - Orchestrator configuration is scripted and checked in. Do not create required tenant state only through the UI.
 - A role never edits another role's owned path without an explicit handoff agreed by both people.
+- Owned paths are exclusive. A role must not edit, delete, rename, regenerate, or reformat another role's owned paths.
+- Shared files may be changed only by Alpha as integration steward, or through an explicit handoff recorded in the checkpoint report.
 - A branch is mergeable only when its listed exit commands pass and the handoff includes the exact commit SHA.
+- Workers and worktrees are isolated: never terminate another worker or process, delete another worker's worktree, overwrite uncommitted changes, or use destructive Git recovery.
 
 ---
 
@@ -30,6 +33,8 @@
 | Alpha | `alpha` | `src/contracts/`, `src/gates/`, `src/platform/`, `fixtures/cases/`, `tests/contracts/`, `tests/gates/`, platform and solution configuration | Agent reasoning, apps, Action Center UI |
 | Bravo | `bravo` | `src/agent/`, `src/tools/`, `tests/agent/`, `tests/tools/`, prerecorded callback analysis if time permits | Gates, write-capable effectors, app UI |
 | Charlie | `charlie` | `src/maestro/`, `src/effectors/`, `src/apps/`, `tests/integration/`, demo scripts and UI assets | Agent reasoning, gate rules, shared contracts |
+
+The exclusions are hard boundaries. Alpha does not edit `src/agent/`, `src/tools/`, `src/maestro/`, `src/effectors/`, or `src/apps/`. Bravo does not edit `src/contracts/`, `src/gates/`, `src/platform/`, `src/maestro/`, `src/effectors/`, or `src/apps/`. Charlie does not edit `src/contracts/`, `src/gates/`, `src/platform/`, `src/agent/`, or `src/tools/`. No role may create implementation files outside its owned paths.
 
 Alpha is also the integration steward for shared manifests, dependency files, `AGENTS.md`, and solution packaging. That responsibility does not allow Alpha to change another role's logic; integration fixes go back to the owning branch.
 
@@ -63,14 +68,18 @@ git fetch origin
 git merge --no-edit origin/main
 ```
 
-After the exit checks pass:
+Before syncing, run `git status --short` and preserve any local work. If the worktree is dirty, commit the checkpoint or stop and report the state; do not stash-and-drop, reset, clean, or overwrite files belonging to another worker. If a merge conflict occurs, resolve only files owned by the current role; stop and request a handoff for shared or foreign-owned files.
+
+After the exit checks pass, record the exact commit SHA and exit evidence before opening a pull request:
 
 ```powershell
 git status --short
 git push origin HEAD
 ```
 
-Open a pull request from the role branch to `main`. The reviewer confirms the exit evidence and owned paths before merging. Use a merge commit rather than a squash merge so the persistent role branch can resynchronize without rewriting history. Never force-push a role branch. After a checkpoint is merged, every active role fetches and merges the new `origin/main` before continuing.
+Open a pull request from the role branch to `main`. The reviewer confirms the exit evidence, owned paths, and clean handoff before merging. Merge in this order: `alpha`, then `bravo`, then `charlie`. Use a normal reviewed merge commit or fast-forward; never squash, force-push, rewrite shared history, or delete a role branch. After each merge, the next active role fetches and merges the new `origin/main` before continuing. The integration steward announces the resulting `main` SHA so no worker builds on an unknown baseline.
+
+If another worker is still running, leave that worker and its worktree untouched. Do not stop it to resolve a conflict or reclaim files; wait for its checkpoint or request an explicit handoff.
 
 Use small, descriptive commits such as `feat(gates): evaluate fixed policy controls`, `feat(agent): resolve known name mismatch`, or `feat(app): show evidence-backed escalation`.
 
@@ -222,19 +231,19 @@ After cloning the repository, the shortest supported prompt is just the role nam
 ### Alpha
 
 ```text
-Alpha. Work only on the alpha branch and execute the next incomplete Alpha checkpoint in docs/three-instance-build-plan.md. Read AGENTS.md and both required domain documents first. Enforce contract-first development and deterministic gates. Run the checkpoint exit commands, make focused commits, push origin/alpha, and report the commit SHA plus exact test evidence. Stop at the checkpoint; do not implement Bravo or Charlie work and do not merge to main without review.
+Alpha. Work only on the alpha branch and execute the next incomplete Alpha checkpoint in docs/three-instance-build-plan.md. Read AGENTS.md and both required domain documents first. Enforce contract-first development and deterministic gates. Run the checkpoint exit commands, make focused commits, push origin/alpha, and report the commit SHA plus exact test evidence. Open the reviewed Alpha pull request to main; preserve commits and never force-push, reset shared history, terminate another worker, or edit Bravo/Charlie paths. Stop at the checkpoint; do not implement Bravo or Charlie work and do not merge without review.
 ```
 
 ### Bravo
 
 ```text
-Bravo. Work only on the bravo branch and execute the next incomplete Bravo checkpoint in docs/three-instance-build-plan.md. Read AGENTS.md and both required domain documents first. Before writing implementation code, verify Alpha A0 is present on origin/main and merge origin/main into bravo. Keep the agent read-only, async, evidence-backed, typed, and bounded. Run the checkpoint exit commands, make focused commits, push origin/bravo, and report the commit SHA plus exact test evidence. Stop at the checkpoint; do not edit Alpha or Charlie paths.
+Bravo. Work only on the bravo branch and execute the next incomplete Bravo checkpoint in docs/three-instance-build-plan.md. Read AGENTS.md and both required domain documents first. Before writing implementation code, verify Alpha A0 is present on origin/main and merge origin/main into bravo. Keep the agent read-only, async, evidence-backed, typed, and bounded. Run the checkpoint exit commands, make focused commits, push origin/bravo, and report the commit SHA plus exact test evidence. Open the reviewed Bravo pull request only after Alpha is merged; preserve commits and never force-push, reset shared history, terminate another worker, or edit Alpha/Charlie paths. Stop at the checkpoint.
 ```
 
 ### Charlie
 
 ```text
-Charlie. Work only on the charlie branch and execute the next incomplete Charlie checkpoint in docs/three-instance-build-plan.md. Read AGENTS.md and both required domain documents first. Before writing implementation code, verify Alpha A0 is present on origin/main and merge origin/main into charlie. Build orchestration and operator surfaces against the shared contracts; keep all payment writes behind effectors. Run the checkpoint exit commands, make focused commits, push origin/charlie, and report the commit SHA plus exact test evidence. Stop at the checkpoint; do not edit Alpha or Bravo paths.
+Charlie. Work only on the charlie branch and execute the next incomplete Charlie checkpoint in docs/three-instance-build-plan.md. Read AGENTS.md and both required domain documents first. Before writing implementation code, verify Alpha A0 is present on origin/main and merge origin/main into charlie. Build orchestration and operator surfaces against the shared contracts; keep all payment writes behind effectors. Run the checkpoint exit commands, make focused commits, push origin/charlie, and report the commit SHA plus exact test evidence. Open the reviewed Charlie pull request only after Alpha and Bravo are merged; preserve commits and never force-push, reset shared history, terminate another worker, or edit Alpha/Bravo paths. Stop at the checkpoint.
 ```
 
 ## Checkpoint handoff format
