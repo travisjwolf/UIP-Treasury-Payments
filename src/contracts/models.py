@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date
 from typing import Any, Literal, Self
 
 from pydantic import (
@@ -40,6 +40,17 @@ class ProposedAction(ContractModel):
     current_value: ScalarValue
     proposed_value: ScalarValue
 
+    def __init__(self, *args: Any, **data: Any) -> None:
+        field_names = ("field", "current_value", "proposed_value")
+        if len(args) > len(field_names):
+            raise TypeError(f"Expected at most {len(field_names)} positional arguments")
+        positional = dict(zip(field_names, args, strict=False))
+        duplicates = positional.keys() & data.keys()
+        if duplicates:
+            duplicate = sorted(duplicates)[0]
+            raise TypeError(f"Multiple values for {duplicate}")
+        super().__init__(**positional, **data)
+
     @model_validator(mode="after")
     def proposed_value_must_change(self) -> Self:
         if self.current_value == self.proposed_value:
@@ -66,7 +77,7 @@ class PaymentCase(ContractModel):
     amount_usd: float = Field(gt=0)
     currency: str = Field(pattern=r"^[A-Z]{3}$")
     value_date: date
-    cutoff_time: time
+    cutoff_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$")
     sla_deadline: AwareDatetime | None = None
     source_channel: str = Field(min_length=1)
     customer_id: str = Field(min_length=1)

@@ -21,7 +21,7 @@
     "current_queue": "repair",
     "customer_id": "CUST-1409",
     "customer_name": "Kestrel Manufacturing Corp",
-    "cutoff_time": "17:00:00",
+    "cutoff_time": "17:00",
     "cycle_time": null,
     "direction": "inbound",
     "exception_code": "EX-01",

@@ -102,6 +102,12 @@ def test_payment_case_fields_match_the_published_entity_contract() -> None:
     assert set(getattr(PaymentCase, "model_fields", {})) == PAYMENT_FIELDS
 
 
+def test_payment_case_preserves_display_cutoff_string() -> None:
+    case = PaymentCase.model_validate(payment_data())
+
+    assert case.cutoff_time == "17:00"
+
+
 def test_payment_case_rejects_fields_outside_the_published_contract() -> None:
     data = payment_data()
     data["sanctions_status"] = "clear"
@@ -145,6 +151,14 @@ def test_proposed_action_rejects_a_blank_field_name() -> None:
 def test_proposed_action_requires_the_proposed_value_key() -> None:
     with pytest.raises(ValidationError):
         ProposedAction(field="beneficiary_name", current_value="old")
+
+
+def test_proposed_action_accepts_legacy_positional_construction() -> None:
+    action = ProposedAction("beneficiary_name", "old", "new")
+
+    assert action.field == ProposedField.BENEFICIARY_NAME
+    assert action.current_value == "old"
+    assert action.proposed_value == "new"
 
 
 @pytest.mark.parametrize(
