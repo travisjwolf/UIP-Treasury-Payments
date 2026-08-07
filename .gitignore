@@ -1,0 +1,23 @@
+# Local/editor state
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node/build output
+node_modules/
+dist/
+build/
+
+# Local/generated export folders
+mnt/
+wire-repair-prework/
