@@ -1,0 +1,6 @@
+{
+  "ProjectType": "Agent",
+  "Name": "wire-repair-agent",
+  "Description": "Evidence-backed wire repair agent for the Treasury Payments demo",
+  "MainFile": null
+}

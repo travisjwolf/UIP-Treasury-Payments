@@ -1,0 +1,8 @@
+.agent/
+.env
+.uipath/
+.venv/
+AGENTS.md
+CLAUDE.md
+__pycache__/
+__uipath/

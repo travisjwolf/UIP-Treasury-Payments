@@ -1,0 +1,190 @@
+{
+  "version": "1.0",
+  "id": "treasury-payment-hero-smoke",
+  "name": "Treasury Payment Hero Smoke Tests",
+  "description": "Validates the exact proposed repairs, outcomes, confidence values, and read-only tool order for WIRE-8802 and WIRE-8841.",
+  "evaluatorRefs": [
+    "HeroOutputEvaluator"
+  ],
+  "evaluations": [
+    {
+      "id": "hero-wire-8802-name-repair",
+      "name": "WIRE-8802 resolves the known beneficiary name mismatch",
+      "inputs": {
+        "case_id": "WIRE-8802",
+        "payment": {
+          "case_id": "WIRE-8802",
+          "rail": "Fedwire",
+          "direction": "outbound",
+          "amount_usd": 84500.0,
+          "currency": "USD",
+          "value_date": "2026-08-07",
+          "cutoff_time": "17:00",
+          "sla_deadline": null,
+          "source_channel": "file_upload",
+          "customer_id": "CUST-1042",
+          "customer_name": "Ridgeline Construction LLC",
+          "beneficiary_name": "PACIFIC STEEL & SUPPY",
+          "beneficiary_account": "8823004417",
+          "beneficiary_bank_aba": "121000248",
+          "remittance_info": "INV 44821 STEEL DELIVERY",
+          "exception_code": "EX-02",
+          "exception_type": "name_account_mismatch",
+          "current_queue": "repair",
+          "status": "in_flight",
+          "worked_by": null,
+          "confidence": null,
+          "proposed_action": null,
+          "outcome": null,
+          "touch_count": 0,
+          "cycle_time": null
+        },
+        "fixture_metadata": {
+          "demo_role": "hero_auto_resolve",
+          "first_time_counterparty": false,
+          "sanctions_flag": "clear",
+          "received_at": "2026-08-07T08:18"
+        }
+      },
+      "evaluationCriterias": {
+        "HeroOutputEvaluator": {
+          "expectedOutput": {
+            "outcome": "RESOLVED",
+            "proposed_action": {
+              "field": "beneficiary_name",
+              "current_value": "PACIFIC STEEL & SUPPY",
+              "proposed_value": "PACIFIC STEEL & SUPPLY"
+            },
+            "confidence": 0.94,
+            "tools_called": [
+              "sanctions",
+              "account_lookup",
+              "counterparty_history"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "hero-wire-8841-account-repair",
+      "name": "WIRE-8841 proposes the account repair but preserves the G1 approval boundary",
+      "inputs": {
+        "case_id": "WIRE-8841",
+        "payment": {
+          "case_id": "WIRE-8841",
+          "rail": "Fedwire",
+          "direction": "outbound",
+          "amount_usd": 2450000.0,
+          "currency": "USD",
+          "value_date": "2026-08-07",
+          "cutoff_time": "17:00",
+          "sla_deadline": null,
+          "source_channel": "phone_fax",
+          "customer_id": "CUST-1042",
+          "customer_name": "Ridgeline Construction LLC",
+          "beneficiary_name": "PACIFIC STEEL & SUPPLY",
+          "beneficiary_account": "882300441",
+          "beneficiary_bank_aba": "121000248",
+          "remittance_info": "PROGRESS DRAW 7",
+          "exception_code": "EX-01",
+          "exception_type": "beneficiary_account_not_found",
+          "current_queue": "repair",
+          "status": "in_flight",
+          "worked_by": null,
+          "confidence": null,
+          "proposed_action": null,
+          "outcome": null,
+          "touch_count": 0,
+          "cycle_time": null
+        },
+        "fixture_metadata": {
+          "demo_role": "hero_gate_blocked",
+          "first_time_counterparty": false,
+          "sanctions_flag": "clear",
+          "received_at": "2026-08-07T08:56"
+        }
+      },
+      "evaluationCriterias": {
+        "HeroOutputEvaluator": {
+          "expectedOutput": {
+            "outcome": "BLOCKED_POLICY",
+            "proposed_action": {
+              "field": "beneficiary_account",
+              "current_value": "882300441",
+              "proposed_value": "8823004417"
+            },
+            "confidence": 0.91,
+            "tools_called": [
+              "sanctions",
+              "account_lookup",
+              "counterparty_history"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "bounded-exhaustion-retains-trace",
+      "name": "Unsupported evidence path exhausts its bounded investigation",
+      "inputs": {
+        "case_id": "WIRE-SMOKE-EXHAUSTED",
+        "payment": {
+          "case_id": "WIRE-SMOKE-EXHAUSTED",
+          "rail": "Fedwire",
+          "direction": "outbound",
+          "amount_usd": 1000.0,
+          "currency": "USD",
+          "value_date": "2026-08-07",
+          "cutoff_time": "17:00",
+          "sla_deadline": null,
+          "source_channel": "file_upload",
+          "customer_id": "CUST-9999",
+          "customer_name": "Synthetic Exhaustion Customer",
+          "beneficiary_name": "UNKNOWN BENEFICIARY",
+          "beneficiary_account": "0000000000",
+          "beneficiary_bank_aba": "121000248",
+          "remittance_info": "SMOKE TEST",
+          "exception_code": "EX-99",
+          "exception_type": "unsupported_smoke_exception",
+          "current_queue": "repair",
+          "status": "in_flight",
+          "worked_by": null,
+          "confidence": null,
+          "proposed_action": null,
+          "outcome": null,
+          "touch_count": 0,
+          "cycle_time": null
+        },
+        "fixture_metadata": {
+          "demo_role": "bounded_exhaustion",
+          "first_time_counterparty": true,
+          "sanctions_flag": "clear",
+          "received_at": "2026-08-07T09:00"
+        }
+      },
+      "evaluationCriterias": {
+        "HeroOutputEvaluator": {
+          "expectedOutput": {
+            "outcome": "EXHAUSTED",
+            "proposed_action": null,
+            "confidence": 0.0,
+            "tools_called": [
+              "sanctions",
+              "account_lookup",
+              "counterparty_history",
+              "documents",
+              "sanctions",
+              "account_lookup",
+              "counterparty_history",
+              "documents",
+              "sanctions",
+              "account_lookup",
+              "counterparty_history",
+              "documents"
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

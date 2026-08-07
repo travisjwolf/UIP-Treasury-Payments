@@ -1,0 +1,379 @@
+{
+    "$schema": "https://cloud.uipath.com/draft/2024-12/entry-point",
+    "$id": "entry-points.json",
+    "entryPoints": [
+        {
+            "filePath": "agent",
+            "uniqueId": "72215225-ad89-44e0-b111-4656222c56fb",
+            "type": "agent",
+            "input": {
+                "type": "object",
+                "properties": {
+                    "case_id": {
+                        "description": "Wire-repair case identifier to investigate.",
+                        "title": "Case Id",
+                        "type": "string"
+                    },
+                    "payment": {
+                        "properties": {
+                            "case_id": {
+                                "description": "Unique wire-repair case identifier.",
+                                "title": "Case Id",
+                                "type": "string"
+                            },
+                            "rail": {
+                                "description": "Payment rail, such as Fedwire.",
+                                "title": "Rail",
+                                "type": "string"
+                            },
+                            "direction": {
+                                "description": "Inbound or outbound payment direction.",
+                                "title": "Direction",
+                                "type": "string"
+                            },
+                            "amount_usd": {
+                                "description": "Payment amount normalized to USD.",
+                                "exclusiveMinimum": 0,
+                                "title": "Amount Usd",
+                                "type": "number"
+                            },
+                            "currency": {
+                                "description": "ISO currency code on the payment.",
+                                "title": "Currency",
+                                "type": "string"
+                            },
+                            "value_date": {
+                                "description": "Payment value date in YYYY-MM-DD format.",
+                                "title": "Value Date",
+                                "type": "string"
+                            },
+                            "cutoff_time": {
+                                "description": "Applicable rail cutoff time in HH:MM format.",
+                                "title": "Cutoff Time",
+                                "type": "string"
+                            },
+                            "sla_deadline": {
+                                "type": "string"
+                            },
+                            "source_channel": {
+                                "description": "Channel through which the wire originated.",
+                                "title": "Source Channel",
+                                "type": "string"
+                            },
+                            "customer_id": {
+                                "description": "Commercial customer identifier.",
+                                "title": "Customer Id",
+                                "type": "string"
+                            },
+                            "customer_name": {
+                                "description": "Commercial customer display name.",
+                                "title": "Customer Name",
+                                "type": "string"
+                            },
+                            "beneficiary_name": {
+                                "description": "Beneficiary name currently on the wire.",
+                                "title": "Beneficiary Name",
+                                "type": "string"
+                            },
+                            "beneficiary_account": {
+                                "description": "Beneficiary account currently on the wire.",
+                                "title": "Beneficiary Account",
+                                "type": "string"
+                            },
+                            "beneficiary_bank_aba": {
+                                "description": "Beneficiary bank ABA routing number.",
+                                "title": "Beneficiary Bank Aba",
+                                "type": "string"
+                            },
+                            "remittance_info": {
+                                "description": "Wire remittance or invoice information.",
+                                "title": "Remittance Info",
+                                "type": "string"
+                            },
+                            "exception_code": {
+                                "description": "Intake exception code requiring repair.",
+                                "title": "Exception Code",
+                                "type": "string"
+                            },
+                            "exception_type": {
+                                "description": "Human-readable intake exception category.",
+                                "title": "Exception Type",
+                                "type": "string"
+                            },
+                            "current_queue": {
+                                "type": "string"
+                            },
+                            "status": {
+                                "type": "string"
+                            },
+                            "worked_by": {
+                                "type": "string"
+                            },
+                            "confidence": {
+                                "maximum": 1,
+                                "minimum": 0,
+                                "type": "number"
+                            },
+                            "proposed_action": {
+                                "properties": {
+                                    "field": {
+                                        "description": "Payment field that the agent proposes changing.",
+                                        "minLength": 1,
+                                        "title": "Field",
+                                        "type": "string"
+                                    },
+                                    "current_value": {
+                                        "description": "Value currently present on the payment.",
+                                        "minLength": 1,
+                                        "title": "Current Value",
+                                        "type": "string"
+                                    },
+                                    "proposed_value": {
+                                        "description": "Replacement value copied from cited read-only evidence.",
+                                        "minLength": 1,
+                                        "title": "Proposed Value",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "field",
+                                    "current_value",
+                                    "proposed_value"
+                                ],
+                                "title": "ProposedActionOutput",
+                                "type": "object"
+                            },
+                            "outcome": {
+                                "enum": [
+                                    "RESOLVED",
+                                    "RESOLVED_LOW_CONFIDENCE",
+                                    "AMBIGUOUS",
+                                    "NEEDS_INFO",
+                                    "EXHAUSTED",
+                                    "BLOCKED_POLICY"
+                                ],
+                                "type": "string"
+                            },
+                            "touch_count": {
+                                "minimum": 0,
+                                "type": "integer"
+                            },
+                            "cycle_time": {
+                                "minimum": 0,
+                                "type": "number"
+                            }
+                        },
+                        "required": [
+                            "case_id",
+                            "rail",
+                            "direction",
+                            "amount_usd",
+                            "currency",
+                            "value_date",
+                            "cutoff_time",
+                            "sla_deadline",
+                            "source_channel",
+                            "customer_id",
+                            "customer_name",
+                            "beneficiary_name",
+                            "beneficiary_account",
+                            "beneficiary_bank_aba",
+                            "remittance_info",
+                            "exception_code",
+                            "exception_type",
+                            "current_queue",
+                            "status",
+                            "worked_by"
+                        ],
+                        "title": "PaymentInput",
+                        "type": "object"
+                    },
+                    "fixture_metadata": {
+                        "properties": {
+                            "demo_role": {
+                                "type": "string"
+                            },
+                            "first_time_counterparty": {
+                                "type": "boolean"
+                            },
+                            "sanctions_flag": {
+                                "type": "string"
+                            },
+                            "received_at": {
+                                "type": "string"
+                            }
+                        },
+                        "title": "FixtureMetadataInput",
+                        "type": "object"
+                    }
+                },
+                "required": [
+                    "case_id",
+                    "payment"
+                ]
+            },
+            "output": {
+                "type": "object",
+                "properties": {
+                    "outcome": {
+                        "description": "Closed-set repair outcome returned to orchestration.",
+                        "enum": [
+                            "RESOLVED",
+                            "RESOLVED_LOW_CONFIDENCE",
+                            "AMBIGUOUS",
+                            "NEEDS_INFO",
+                            "EXHAUSTED",
+                            "BLOCKED_POLICY"
+                        ],
+                        "title": "Outcome",
+                        "type": "string"
+                    },
+                    "proposed_action": {
+                        "properties": {
+                            "field": {
+                                "description": "Payment field that the agent proposes changing.",
+                                "minLength": 1,
+                                "title": "Field",
+                                "type": "string"
+                            },
+                            "current_value": {
+                                "description": "Value currently present on the payment.",
+                                "minLength": 1,
+                                "title": "Current Value",
+                                "type": "string"
+                            },
+                            "proposed_value": {
+                                "description": "Replacement value copied from cited read-only evidence.",
+                                "minLength": 1,
+                                "title": "Proposed Value",
+                                "type": "string"
+                            }
+                        },
+                        "required": [
+                            "field",
+                            "current_value",
+                            "proposed_value"
+                        ],
+                        "title": "ProposedActionOutput",
+                        "type": "object"
+                    },
+                    "confidence": {
+                        "description": "Confidence in the proposed repair, between zero and one.",
+                        "maximum": 1,
+                        "minimum": 0,
+                        "title": "Confidence",
+                        "type": "number"
+                    },
+                    "evidence": {
+                        "description": "Cumulative read-only evidence trace supporting the result.",
+                        "items": {
+                            "properties": {
+                                "case_id": {
+                                    "description": "Wire-repair case identifier for this evidence.",
+                                    "title": "Case Id",
+                                    "type": "string"
+                                },
+                                "type": {
+                                    "description": "Evidence category, such as lookup or history_match.",
+                                    "title": "Type",
+                                    "type": "string"
+                                },
+                                "source": {
+                                    "description": "Read-only source URI that produced the evidence.",
+                                    "title": "Source",
+                                    "type": "string"
+                                },
+                                "content": {
+                                    "description": "Canonical JSON payload returned by the source.",
+                                    "title": "Content",
+                                    "type": "string"
+                                },
+                                "produced_by": {
+                                    "description": "Read-only tool that produced this record.",
+                                    "title": "Produced By",
+                                    "type": "string"
+                                },
+                                "timestamp": {
+                                    "description": "ISO-8601 timestamp assigned to the evidence.",
+                                    "title": "Timestamp",
+                                    "type": "string"
+                                }
+                            },
+                            "required": [
+                                "case_id",
+                                "type",
+                                "source",
+                                "content",
+                                "produced_by",
+                                "timestamp"
+                            ],
+                            "title": "EvidenceOutput",
+                            "type": "object"
+                        },
+                        "title": "Evidence",
+                        "type": "array"
+                    },
+                    "reasoning_summary": {
+                        "description": "Concise explanation of the evidence and control boundary.",
+                        "minLength": 1,
+                        "title": "Reasoning Summary",
+                        "type": "string"
+                    },
+                    "tools_called": {
+                        "description": "Read-only tools called, in execution order.",
+                        "items": {
+                            "type": "string"
+                        },
+                        "title": "Tools Called",
+                        "type": "array"
+                    }
+                },
+                "required": [
+                    "outcome",
+                    "proposed_action",
+                    "confidence",
+                    "evidence",
+                    "reasoning_summary",
+                    "tools_called"
+                ]
+            },
+            "graph": {
+                "nodes": [
+                    {
+                        "id": "__start__",
+                        "name": "__start__",
+                        "type": "__start__",
+                        "subgraph": null,
+                        "metadata": {}
+                    },
+                    {
+                        "id": "investigate_and_propose",
+                        "name": "investigate_and_propose",
+                        "type": "node",
+                        "subgraph": null,
+                        "metadata": {}
+                    },
+                    {
+                        "id": "__end__",
+                        "name": "__end__",
+                        "type": "__end__",
+                        "subgraph": null,
+                        "metadata": {}
+                    }
+                ],
+                "edges": [
+                    {
+                        "source": "__start__",
+                        "target": "investigate_and_propose",
+                        "label": null
+                    },
+                    {
+                        "source": "investigate_and_propose",
+                        "target": "__end__",
+                        "label": null
+                    }
+                ]
+            }
+        }
+    ]
+}

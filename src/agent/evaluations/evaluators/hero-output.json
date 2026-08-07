@@ -1,0 +1,12 @@
+{
+  "version": "1.0",
+  "id": "HeroOutputEvaluator",
+  "evaluatorTypeId": "uipath-json-similarity",
+  "description": "Checks the deterministic structured result for the two pinned treasury-payment hero cases.",
+  "evaluatorConfig": {
+    "name": "HeroOutputEvaluator",
+    "defaultEvaluationCriteria": {
+      "expectedOutput": {}
+    }
+  }
+}
