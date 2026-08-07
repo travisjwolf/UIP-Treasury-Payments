@@ -14,6 +14,7 @@ from src.contracts import (
     PolicyDecision,
     Outcome,
     PolicyPath,
+    PolicyResult,
     ProposedAction,
     ProposedField,
 )
@@ -208,24 +209,70 @@ def test_outcome_enum_is_the_exact_closed_contract() -> None:
     }
 
 
-def test_policy_paths_represent_hard_stop_and_priority_escalation() -> None:
+def test_policy_path_is_the_exact_fixture_routing_contract() -> None:
     assert {item.value for item in PolicyPath} == {
         "auto_apply",
         "human_approval",
         "compliance_referral",
         "callback_then_human",
-        "hard_stop",
-        "priority_escalation",
     }
-    for path in ("hard_stop", "priority_escalation"):
+
+
+def test_policy_results_represent_every_gate_disposition() -> None:
+    assert {item.value for item in PolicyResult} == {
+        "AUTO_APPLY",
+        "HUMAN_APPROVAL",
+        "COMPLIANCE_REFERRAL",
+        "CALLBACK_THEN_HUMAN",
+        "HARD_STOP",
+        "PRIORITY_ESCALATION",
+        "ESCALATE",
+    }
+    for result in ("HARD_STOP", "PRIORITY_ESCALATION"):
         decision = PolicyDecision(
             case_id="WIRE-8802",
-            gate="G2" if path == "hard_stop" else "G10",
-            result=path,
+            gate="G2" if result == "HARD_STOP" else "G10",
+            result=result,
             reason="Deterministic gate result.",
             evaluated_at=datetime(2026, 8, 7, 12, 19, tzinfo=timezone.utc),
         )
-        assert decision.result.value == path
+        assert decision.result.value == result
+
+
+def test_unresolved_agent_output_can_omit_a_proposed_action() -> None:
+    output = AgentOutput(
+        outcome="NEEDS_INFO",
+        proposed_action=None,
+        confidence=0.74,
+        evidence=[
+            Evidence(
+                case_id="WIRE-8877",
+                type="call_transcript",
+                source="test-fixture",
+                content="Callback required.",
+                produced_by="test-agent",
+                timestamp="2026-08-07T09:00:00Z",
+            )
+        ],
+        reasoning_summary="Customer confirmation is required.",
+        tools_called=("callback_transcript",),
+    )
+
+    assert output.proposed_action is None
+    assert output.evidence[0].content == "Callback required."
+
+
+def test_policy_decision_accepts_legacy_positional_construction() -> None:
+    decision = PolicyDecision(
+        "WIRE-8802",
+        "NONE",
+        "AUTO_APPLY",
+        "All gates clear.",
+        "2026-08-07T09:00:01Z",
+    )
+
+    assert decision.gate == "NONE"
+    assert decision.result == "AUTO_APPLY"
 
 
 def test_gate_context_requires_an_aware_evaluation_time() -> None:
@@ -310,7 +357,7 @@ def test_supporting_contracts_validate_a_complete_fixture_envelope() -> None:
     decision = PolicyDecision(
         case_id="WIRE-8802",
         gate=None,
-        result="auto_apply",
+        result="AUTO_APPLY",
         reason="No policy gate fired.",
         evaluated_at=datetime(2026, 8, 7, 8, 19, tzinfo=timezone.utc),
     )
@@ -318,4 +365,4 @@ def test_supporting_contracts_validate_a_complete_fixture_envelope() -> None:
     assert fixture.payment_case.case_id == "WIRE-8802"
     assert fixture.gate_context.sanctions_status.value == "clear"
     assert history.history_confidence == 0.96
-    assert decision.result.value == "auto_apply"
+    assert decision.result.value == "AUTO_APPLY"

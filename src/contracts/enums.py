@@ -23,8 +23,16 @@ class PolicyPath(str, Enum):
     HUMAN_APPROVAL = "human_approval"
     COMPLIANCE_REFERRAL = "compliance_referral"
     CALLBACK_THEN_HUMAN = "callback_then_human"
-    HARD_STOP = "hard_stop"
-    PRIORITY_ESCALATION = "priority_escalation"
+
+
+class PolicyResult(str, Enum):
+    AUTO_APPLY = "AUTO_APPLY"
+    HUMAN_APPROVAL = "HUMAN_APPROVAL"
+    COMPLIANCE_REFERRAL = "COMPLIANCE_REFERRAL"
+    CALLBACK_THEN_HUMAN = "CALLBACK_THEN_HUMAN"
+    HARD_STOP = "HARD_STOP"
+    PRIORITY_ESCALATION = "PRIORITY_ESCALATION"
+    ESCALATE = "ESCALATE"
 
 
 class GateId(str, Enum):
