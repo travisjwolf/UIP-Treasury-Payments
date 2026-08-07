@@ -12,7 +12,10 @@ from src.contracts import (
     PaymentFixture,
     PolicyConfig,
     PolicyDecision,
+    Outcome,
+    PolicyPath,
     ProposedAction,
+    ProposedField,
 )
 
 
@@ -143,6 +146,88 @@ def test_proposed_action_requires_the_proposed_value_key() -> None:
         ProposedAction(field="beneficiary_name", current_value="old")
 
 
+@pytest.mark.parametrize(
+    "field",
+    ["beneficiary_accout", "not_a_payment_field"],
+)
+def test_proposed_action_rejects_unknown_or_misspelled_fields(field: str) -> None:
+    with pytest.raises(ValidationError):
+        ProposedAction(field=field, current_value="old", proposed_value="new")
+
+
+@pytest.mark.parametrize(
+    ("current_value", "proposed_value"),
+    [
+        (None, "new"),
+        ("old", None),
+        ({"old": "value"}, "new"),
+        ("old", ["new"]),
+    ],
+)
+def test_proposed_action_rejects_null_or_compound_values(
+    current_value: object,
+    proposed_value: object,
+) -> None:
+    with pytest.raises(ValidationError):
+        ProposedAction(
+            field="beneficiary_name",
+            current_value=current_value,
+            proposed_value=proposed_value,
+        )
+
+
+def test_proposed_action_rejects_an_unchanged_value() -> None:
+    with pytest.raises(ValidationError):
+        ProposedAction(
+            field="beneficiary_name",
+            current_value="PACIFIC STEEL & SUPPLY",
+            proposed_value="PACIFIC STEEL & SUPPLY",
+        )
+
+
+def test_proposed_field_enum_uses_canonical_payment_case_names() -> None:
+    assert {item.value for item in ProposedField} == {
+        "amount_usd",
+        "beneficiary_account",
+        "beneficiary_bank_aba",
+        "beneficiary_name",
+        "currency",
+        "customer_name",
+        "remittance_info",
+    }
+
+
+def test_outcome_enum_is_the_exact_closed_contract() -> None:
+    assert {item.value for item in Outcome} == {
+        "RESOLVED",
+        "RESOLVED_LOW_CONFIDENCE",
+        "AMBIGUOUS",
+        "NEEDS_INFO",
+        "EXHAUSTED",
+        "BLOCKED_POLICY",
+    }
+
+
+def test_policy_paths_represent_hard_stop_and_priority_escalation() -> None:
+    assert {item.value for item in PolicyPath} == {
+        "auto_apply",
+        "human_approval",
+        "compliance_referral",
+        "callback_then_human",
+        "hard_stop",
+        "priority_escalation",
+    }
+    for path in ("hard_stop", "priority_escalation"):
+        decision = PolicyDecision(
+            case_id="WIRE-8802",
+            gate="G2" if path == "hard_stop" else "G10",
+            result=path,
+            reason="Deterministic gate result.",
+            evaluated_at=datetime(2026, 8, 7, 12, 19, tzinfo=timezone.utc),
+        )
+        assert decision.result.value == path
+
+
 def test_gate_context_requires_an_aware_evaluation_time() -> None:
     with pytest.raises(ValidationError):
         GateContext(
@@ -151,7 +236,16 @@ def test_gate_context_requires_an_aware_evaluation_time() -> None:
             same_day_beneficiary_total_usd=84_500.0,
             cross_border=False,
             evaluated_at=datetime(2026, 8, 7, 8, 18),
+            cutoff_at=datetime(2026, 8, 7, 17, 0, tzinfo=timezone.utc),
         )
+
+
+def test_payment_case_requires_an_aware_sla_deadline_when_present() -> None:
+    data = payment_data()
+    data["sla_deadline"] = datetime(2026, 8, 7, 17, 0)
+
+    with pytest.raises(ValidationError):
+        PaymentCase.model_validate(data)
 
 
 def test_policy_config_defaults_match_the_documented_gate_thresholds() -> None:
@@ -195,6 +289,7 @@ def test_supporting_contracts_validate_a_complete_fixture_envelope() -> None:
         same_day_beneficiary_total_usd=84_500.0,
         cross_border=False,
         evaluated_at=datetime(2026, 8, 7, 8, 18, tzinfo=timezone.utc),
+        cutoff_at=datetime(2026, 8, 7, 17, 0, tzinfo=timezone.utc),
     )
     fixture = PaymentFixture(
         payment_case=payment,

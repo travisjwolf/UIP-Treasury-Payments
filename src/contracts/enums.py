@@ -23,6 +23,8 @@ class PolicyPath(str, Enum):
     HUMAN_APPROVAL = "human_approval"
     COMPLIANCE_REFERRAL = "compliance_referral"
     CALLBACK_THEN_HUMAN = "callback_then_human"
+    HARD_STOP = "hard_stop"
+    PRIORITY_ESCALATION = "priority_escalation"
 
 
 class GateId(str, Enum):
@@ -44,3 +46,13 @@ class SanctionsStatus(str, Enum):
     REVIEW = "review"
     MATCH = "match"
     UNKNOWN = "unknown"
+
+
+class ProposedField(str, Enum):
+    AMOUNT_USD = "amount_usd"
+    BENEFICIARY_ACCOUNT = "beneficiary_account"
+    BENEFICIARY_BANK_ABA = "beneficiary_bank_aba"
+    BENEFICIARY_NAME = "beneficiary_name"
+    CURRENCY = "currency"
+    CUSTOMER_NAME = "customer_name"
+    REMITTANCE_INFO = "remittance_info"

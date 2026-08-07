@@ -28,6 +28,7 @@ def test_build_payment_fixture_maps_hero_case_to_contract_envelope() -> None:
     assert fixture.gate_context.first_time_counterparty is False
     assert fixture.gate_context.same_day_beneficiary_total_usd == 84_500.0
     assert fixture.gate_context.evaluated_at.isoformat() == "2026-08-07T08:18:00-04:00"
+    assert fixture.gate_context.cutoff_at.isoformat() == "2026-08-07T17:00:00-04:00"
     assert fixture.expected_outcome.value == "RESOLVED"
     assert fixture.expected_path.value == "auto_apply"
     assert fixture.demo_role == "hero_auto_resolve"
@@ -68,3 +69,13 @@ def test_repository_case_files_match_every_csv_row() -> None:
         assert fixture.payment_case.case_id == case_id
         assert fixture.expected_outcome.value == expected[case_id][0]
         assert fixture.expected_path.value == expected[case_id][1]
+
+
+def test_repository_case_files_are_canonical_generator_output(tmp_path: Path) -> None:
+    canonical_dir = tmp_path / "canonical"
+    canonical_paths = write_case_fixtures(PAYMENTS_CSV, canonical_dir)
+    repository_dir = REPOSITORY_ROOT / "fixtures" / "cases"
+
+    for canonical_path in canonical_paths:
+        repository_path = repository_dir / canonical_path.name
+        assert repository_path.read_bytes() == canonical_path.read_bytes()

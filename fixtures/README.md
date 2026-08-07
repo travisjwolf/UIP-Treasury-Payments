@@ -27,3 +27,5 @@ python -m pytest tests/contracts -v
 ```
 
 Each case envelope keeps the published `PaymentCase` fields separate from deterministic `GateContext` inputs and the expected demo result.
+
+For reproducible fixture evaluation, `GateContext.evaluated_at` is initialized from the CSV `received_at` value and `GateContext.cutoff_at` is the value date plus rail cutoff in `America/New_York`. Runtime gate evaluation replaces `evaluated_at` with the actual evaluation instant.

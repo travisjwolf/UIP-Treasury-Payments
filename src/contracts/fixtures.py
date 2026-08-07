@@ -27,6 +27,10 @@ def _parse_evaluated_at(value: str) -> datetime:
     return parsed.astimezone(EASTERN)
 
 
+def _parse_cutoff_at(value_date: str, cutoff_time: str) -> datetime:
+    return datetime.fromisoformat(f"{value_date}T{cutoff_time}").replace(tzinfo=EASTERN)
+
+
 def build_payment_fixture(row: Mapping[str, str]) -> PaymentFixture:
     amount_usd = float(row["amount_usd"])
     payment_case = PaymentCase(
@@ -65,6 +69,7 @@ def build_payment_fixture(row: Mapping[str, str]) -> PaymentFixture:
         same_day_beneficiary_total_usd=amount_usd,
         cross_border=row["currency"] != "USD",
         evaluated_at=_parse_evaluated_at(row["received_at"]),
+        cutoff_at=_parse_cutoff_at(row["value_date"], row["cutoff_time"]),
     )
     return PaymentFixture(
         payment_case=payment_case,

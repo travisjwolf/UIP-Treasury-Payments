@@ -23,6 +23,7 @@ def test_contract_package_exposes_required_models() -> None:
         "GateId",
         "Outcome",
         "PolicyPath",
+        "ProposedField",
         "SanctionsStatus",
     }
     assert required <= set(dir(contracts))

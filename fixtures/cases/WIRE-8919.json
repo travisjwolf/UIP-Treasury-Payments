@@ -4,6 +4,7 @@
   "expected_path": "human_approval",
   "gate_context": {
     "cross_border": false,
+    "cutoff_at": "2026-08-07T17:00:00-04:00",
     "evaluated_at": "2026-08-07T10:14:00-04:00",
     "first_time_counterparty": true,
     "same_day_beneficiary_total_usd": 77214.06,

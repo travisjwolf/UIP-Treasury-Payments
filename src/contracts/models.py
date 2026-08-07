@@ -1,9 +1,28 @@
-from datetime import date, datetime, time
-from typing import Any, Literal
+from datetime import date, time
+from typing import Any, Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictFloat,
+    StrictInt,
+    StrictStr,
+    model_validator,
+)
 
-from .enums import EvidenceType, GateId, Outcome, PolicyPath, SanctionsStatus
+from .enums import (
+    EvidenceType,
+    GateId,
+    Outcome,
+    PolicyPath,
+    ProposedField,
+    SanctionsStatus,
+)
+
+
+ScalarValue = StrictStr | StrictInt | StrictFloat
 
 
 class ContractModel(BaseModel):
@@ -15,9 +34,17 @@ class ContractModel(BaseModel):
 
 
 class ProposedAction(ContractModel):
-    field: str = Field(min_length=1)
-    current_value: Any
-    proposed_value: Any
+    field: ProposedField
+    current_value: ScalarValue
+    proposed_value: ScalarValue
+
+    @model_validator(mode="after")
+    def proposed_value_must_change(self) -> Self:
+        if self.current_value == self.proposed_value:
+            raise ValueError("proposed_value must differ from current_value")
+        if isinstance(self.proposed_value, str) and not self.proposed_value:
+            raise ValueError("proposed_value must not be blank")
+        return self
 
 
 class PaymentCase(ContractModel):
@@ -28,7 +55,7 @@ class PaymentCase(ContractModel):
     currency: str = Field(pattern=r"^[A-Z]{3}$")
     value_date: date
     cutoff_time: time
-    sla_deadline: datetime | None = None
+    sla_deadline: AwareDatetime | None = None
     source_channel: str = Field(min_length=1)
     customer_id: str = Field(min_length=1)
     customer_name: str = Field(min_length=1)
@@ -90,6 +117,7 @@ class GateContext(ContractModel):
     same_day_beneficiary_total_usd: float = Field(ge=0)
     cross_border: bool
     evaluated_at: AwareDatetime
+    cutoff_at: AwareDatetime
 
 
 class PolicyConfig(ContractModel):

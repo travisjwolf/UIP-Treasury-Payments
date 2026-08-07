@@ -1,4 +1,11 @@
-from .enums import EvidenceType, GateId, Outcome, PolicyPath, SanctionsStatus
+from .enums import (
+    EvidenceType,
+    GateId,
+    Outcome,
+    PolicyPath,
+    ProposedField,
+    SanctionsStatus,
+)
 from .models import (
     AgentOutput,
     CounterpartyHistory,
@@ -25,5 +32,6 @@ __all__ = [
     "GateId",
     "Outcome",
     "PolicyPath",
+    "ProposedField",
     "SanctionsStatus",
 ]
