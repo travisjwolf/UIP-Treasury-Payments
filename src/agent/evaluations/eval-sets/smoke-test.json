@@ -80,7 +80,7 @@
                 "case_id": "WIRE-8802",
                 "type": "sanctions",
                 "source": "stub://sanctions-screening",
-                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-8802\", \"status\": \"clear\"}",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPY\", \"case_id\": \"WIRE-8802\", \"customer_id\": \"CUST-1042\", \"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-8802\", \"status\": \"clear\"}",
                 "produced_by": "sanctions",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -88,7 +88,7 @@
                 "case_id": "WIRE-8802",
                 "type": "lookup",
                 "source": "stub://core-account-lookup",
-                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"match_status\": \"exact\"}",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"match_status\": \"exact\", \"queried_beneficiary_account\": \"8823004417\"}",
                 "produced_by": "account_lookup",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -96,7 +96,7 @@
                 "case_id": "WIRE-8802",
                 "type": "history_match",
                 "source": "stub://counterparty-history",
-                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"history_confidence\": 0.94, \"last_applied_fix\": \"expand_truncated_account\", \"times_repaired\": 11, \"times_seen\": 31}",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"history_confidence\": 0.94, \"last_applied_fix\": \"expand_truncated_account\", \"queried_beneficiary_account\": \"8823004417\", \"times_repaired\": 11, \"times_seen\": 31}",
                 "produced_by": "counterparty_history",
                 "timestamp": "2026-08-07T09:00:00Z"
               }
@@ -183,7 +183,7 @@
                 "case_id": "WIRE-8841",
                 "type": "sanctions",
                 "source": "stub://sanctions-screening",
-                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-8841\", \"status\": \"clear\"}",
+                "content": "{\"beneficiary_account\": \"882300441\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"case_id\": \"WIRE-8841\", \"customer_id\": \"CUST-1042\", \"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-8841\", \"status\": \"clear\"}",
                 "produced_by": "sanctions",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -191,7 +191,7 @@
                 "case_id": "WIRE-8841",
                 "type": "lookup",
                 "source": "stub://core-account-lookup",
-                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"882300441\"}",
+                "content": "{\"customer_id\": \"CUST-1042\", \"match_status\": \"not_found\", \"queried_beneficiary_account\": \"882300441\"}",
                 "produced_by": "account_lookup",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -199,12 +199,12 @@
                 "case_id": "WIRE-8841",
                 "type": "history_match",
                 "source": "stub://counterparty-history",
-                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"history_confidence\": 0.94, \"last_applied_fix\": \"expand_truncated_account\", \"times_repaired\": 11, \"times_seen\": 31}",
+                "content": "{\"beneficiary_account\": \"8823004417\", \"beneficiary_name\": \"PACIFIC STEEL & SUPPLY\", \"customer_id\": \"CUST-1042\", \"history_confidence\": 0.94, \"last_applied_fix\": \"expand_truncated_account\", \"queried_beneficiary_account\": \"882300441\", \"times_repaired\": 11, \"times_seen\": 31}",
                 "produced_by": "counterparty_history",
                 "timestamp": "2026-08-07T09:00:00Z"
               }
             ],
-            "reasoning_summary": "History identifies the expanded account, but changing a beneficiary account requires the authoritative deterministic G1 gate and human approval.",
+            "reasoning_summary": "History supports the expanded account as a proposal. The agent has no authority to apply it; the independent deterministic policy evaluation remains authoritative.",
             "tools_called": [
               "sanctions",
               "account_lookup",
@@ -287,7 +287,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "sanctions",
                 "source": "stub://sanctions-screening",
-                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
+                "content": "{\"beneficiary_account\": \"0000000000\", \"beneficiary_name\": \"UNKNOWN BENEFICIARY\", \"case_id\": \"WIRE-SMOKE-EXHAUSTED\", \"customer_id\": \"CUST-9999\", \"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
                 "produced_by": "sanctions",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -295,7 +295,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "lookup",
                 "source": "stub://core-account-lookup",
-                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
+                "content": "{\"customer_id\": \"CUST-9999\", \"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
                 "produced_by": "account_lookup",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -303,7 +303,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "history_match",
                 "source": "stub://counterparty-history",
-                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": []}",
+                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": [], \"queried_beneficiary_account\": \"0000000000\"}",
                 "produced_by": "counterparty_history",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -319,7 +319,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "sanctions",
                 "source": "stub://sanctions-screening",
-                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
+                "content": "{\"beneficiary_account\": \"0000000000\", \"beneficiary_name\": \"UNKNOWN BENEFICIARY\", \"case_id\": \"WIRE-SMOKE-EXHAUSTED\", \"customer_id\": \"CUST-9999\", \"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
                 "produced_by": "sanctions",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -327,7 +327,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "lookup",
                 "source": "stub://core-account-lookup",
-                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
+                "content": "{\"customer_id\": \"CUST-9999\", \"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
                 "produced_by": "account_lookup",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -335,7 +335,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "history_match",
                 "source": "stub://counterparty-history",
-                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": []}",
+                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": [], \"queried_beneficiary_account\": \"0000000000\"}",
                 "produced_by": "counterparty_history",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -351,7 +351,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "sanctions",
                 "source": "stub://sanctions-screening",
-                "content": "{\"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
+                "content": "{\"beneficiary_account\": \"0000000000\", \"beneficiary_name\": \"UNKNOWN BENEFICIARY\", \"case_id\": \"WIRE-SMOKE-EXHAUSTED\", \"customer_id\": \"CUST-9999\", \"lists_checked\": [\"OFAC-SDN\", \"EU-CFSP\"], \"screening_id\": \"STUB-WIRE-SMOKE-EXHAUSTED\", \"status\": \"clear\"}",
                 "produced_by": "sanctions",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -359,7 +359,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "lookup",
                 "source": "stub://core-account-lookup",
-                "content": "{\"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
+                "content": "{\"customer_id\": \"CUST-9999\", \"match_status\": \"not_found\", \"queried_beneficiary_account\": \"0000000000\"}",
                 "produced_by": "account_lookup",
                 "timestamp": "2026-08-07T09:00:00Z"
               },
@@ -367,7 +367,7 @@
                 "case_id": "WIRE-SMOKE-EXHAUSTED",
                 "type": "history_match",
                 "source": "stub://counterparty-history",
-                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": []}",
+                "content": "{\"customer_id\": \"CUST-9999\", \"matches\": [], \"queried_beneficiary_account\": \"0000000000\"}",
                 "produced_by": "counterparty_history",
                 "timestamp": "2026-08-07T09:00:00Z"
               },

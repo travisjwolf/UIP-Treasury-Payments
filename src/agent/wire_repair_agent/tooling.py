@@ -17,6 +17,7 @@ EvidenceType = Literal[
 class PaymentCaseLike(Protocol):
     case_id: str
     customer_id: str
+    beneficiary_name: str
     beneficiary_account: str
 
 
@@ -80,6 +81,10 @@ class StubRepairTools:
             evidence_type="sanctions",
             source="stub://sanctions-screening",
             data={
+                "case_id": case.case_id,
+                "customer_id": case.customer_id,
+                "beneficiary_name": case.beneficiary_name,
+                "beneficiary_account": case.beneficiary_account,
                 "status": "clear",
                 "screening_id": f"STUB-{case.case_id}",
                 "lists_checked": ["OFAC-SDN", "EU-CFSP"],
@@ -89,12 +94,15 @@ class StubRepairTools:
     async def account_lookup(self, case: PaymentCaseLike) -> ToolResult:
         if case.beneficiary_account == "8823004417":
             data = {
+                "customer_id": case.customer_id,
                 "match_status": "exact",
+                "queried_beneficiary_account": case.beneficiary_account,
                 "beneficiary_account": "8823004417",
                 "beneficiary_name": "PACIFIC STEEL & SUPPLY",
             }
         else:
             data = {
+                "customer_id": case.customer_id,
                 "match_status": "not_found",
                 "queried_beneficiary_account": case.beneficiary_account,
             }
@@ -114,6 +122,7 @@ class StubRepairTools:
         if is_known_counterparty:
             data = {
                 "customer_id": "CUST-1042",
+                "queried_beneficiary_account": case.beneficiary_account,
                 "beneficiary_name": "PACIFIC STEEL & SUPPLY",
                 "beneficiary_account": "8823004417",
                 "times_seen": 31,
@@ -122,7 +131,11 @@ class StubRepairTools:
                 "history_confidence": 0.94,
             }
         else:
-            data = {"customer_id": case.customer_id, "matches": []}
+            data = {
+                "customer_id": case.customer_id,
+                "queried_beneficiary_account": case.beneficiary_account,
+                "matches": [],
+            }
         return self._result(
             case,
             tool_name="counterparty_history",

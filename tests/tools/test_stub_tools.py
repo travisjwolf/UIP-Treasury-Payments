@@ -26,6 +26,7 @@ async def test_counterparty_history_evidence_contains_known_beneficiary():
     assert result.tool_name == "counterparty_history"
     assert result.data == {
         "customer_id": "CUST-1042",
+        "queried_beneficiary_account": "8823004417",
         "beneficiary_name": "PACIFIC STEEL & SUPPLY",
         "beneficiary_account": "8823004417",
         "times_seen": 31,
@@ -47,7 +48,11 @@ async def test_counterparty_history_does_not_cross_customer_boundaries():
 
     result = await StubRepairTools().counterparty_history(unrelated_case)
 
-    assert result.data == {"customer_id": "CUST-9999", "matches": []}
+    assert result.data == {
+        "customer_id": "CUST-9999",
+        "queried_beneficiary_account": "8823004417",
+        "matches": [],
+    }
     assert json.loads(result.evidence.content) == result.data
 
 
@@ -57,11 +62,14 @@ async def test_account_lookup_distinguishes_exact_from_truncated_accounts():
     truncated = await StubRepairTools().account_lookup(load_case("WIRE-8841"))
 
     assert exact.data == {
+        "customer_id": "CUST-1042",
         "match_status": "exact",
+        "queried_beneficiary_account": "8823004417",
         "beneficiary_account": "8823004417",
         "beneficiary_name": "PACIFIC STEEL & SUPPLY",
     }
     assert truncated.data == {
+        "customer_id": "CUST-1042",
         "match_status": "not_found",
         "queried_beneficiary_account": "882300441",
     }
@@ -77,6 +85,10 @@ async def test_sanctions_check_returns_clear_evidence():
 
     assert result.tool_name == "sanctions"
     assert result.data == {
+        "case_id": "WIRE-8802",
+        "customer_id": "CUST-1042",
+        "beneficiary_name": "PACIFIC STEEL & SUPPY",
+        "beneficiary_account": "8823004417",
         "status": "clear",
         "screening_id": "STUB-WIRE-8802",
         "lists_checked": ["OFAC-SDN", "EU-CFSP"],
