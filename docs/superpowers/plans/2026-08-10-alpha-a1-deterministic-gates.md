@@ -212,4 +212,3 @@ Expected: A0 contracts and A1 gates all pass.
 git add tests/gates/test_fixture_paths.py src/gates/evaluator.py
 git commit -m "test(gates): verify all fixture routing paths"
 ```
-
