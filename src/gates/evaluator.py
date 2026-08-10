@@ -66,6 +66,11 @@ def evaluate_policy(
                 "G2 proposed repair changes an amount or currency field.",
                 GateId.G2,
             )
+
+    if policy_config.customer_id != payment_case.customer_id:
+        raise ValueError("PolicyConfig.customer_id must match PaymentCase.customer_id")
+
+    if proposal is not None:
         if payment_case.amount_usd > policy_config.auto_apply_amount_threshold_usd:
             return _decision(
                 payment_case,
@@ -144,6 +149,13 @@ def evaluate_policy(
             PolicyResult.PRIORITY_ESCALATION,
             "G10 remaining cutoff time is inside the priority escalation window.",
             GateId.G10,
+        )
+    if agent_output.outcome == Outcome.BLOCKED_POLICY:
+        return _decision(
+            payment_case,
+            gate_context,
+            PolicyResult.ESCALATE,
+            "Agent reported a policy block not explained by an earlier deterministic gate.",
         )
 
     return _decision(
