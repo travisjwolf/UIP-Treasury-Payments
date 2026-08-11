@@ -1,0 +1,16 @@
+[project]
+name = "wire-repair-agent"
+version = "0.0.1"
+description = "Evidence-backed wire repair agent for the Treasury Payments demo"
+authors = [{ name = "UiPath Treasury Payments Hackathon Team" }]
+dependencies = [
+    "uipath>=2.14.1,<3.0.0",
+    "uipath-langchain>=0.16.1,<0.17.0",
+]
+requires-python = ">=3.12,<3.14"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10.0.0",
+    "uipath-dev>=0.0.85,<0.1.0",
+]
