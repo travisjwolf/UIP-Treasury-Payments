@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Payment Operations Control Tower</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; background: #09111f; color: #e8eef8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; background: radial-gradient(circle at 80% 0%, #183459 0, #09111f 42%); }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: end; padding: 28px 5vw 22px; border-bottom: 1px solid #263851; }
+    h1, h2, p { margin: 0; } h1 { font-size: clamp(1.5rem, 3vw, 2.35rem); letter-spacing: -.04em; } h2 { font-size: 1rem; }
+    .eyebrow, .muted { color: #91a3bd; } .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; font-weight: 700; margin-bottom: 8px; }
+    .health { color: #7ee2ac; font-size: .82rem; white-space: nowrap; }
+    main { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(320px, .9fr); gap: 20px; padding: 22px 5vw 40px; }
+    .panel { background: rgba(14, 27, 46, .9); border: 1px solid #263851; border-radius: 16px; overflow: hidden; box-shadow: 0 14px 40px #0002; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-bottom: 1px solid #263851; }
+    .queue { display: grid; gap: 10px; padding: 14px; } .case { width: 100%; text-align: left; color: inherit; background: #13243b; border: 1px solid #2b4262; border-radius: 12px; padding: 15px; cursor: pointer; }
+    .case:hover, .case.selected { border-color: #63b3ff; background: #172d49; } .case-top, .case-bottom { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+    .case-bottom { margin-top: 11px; color: #9db0ca; font-size: .82rem; } .case-id { font-weight: 750; } .amount { font-variant-numeric: tabular-nums; }
+    .badge { border-radius: 999px; padding: 4px 9px; font-size: .7rem; font-weight: 750; white-space: nowrap; } .green { color: #83e6ae; background: #17472e; } .amber { color: #ffd47e; background: #4b3816; } .blue { color: #9ed4ff; background: #193d5d; }
+    .detail { padding: 20px; } .detail h2 { font-size: 1.35rem; margin-bottom: 4px; } .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 22px 0; }
+    .metric { padding: 12px; border: 1px solid #263851; border-radius: 10px; } .metric-label { color: #91a3bd; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; } .metric-value { margin-top: 5px; font-weight: 700; }
+    .evidence { margin: 18px 0; padding: 13px; border-left: 3px solid #63b3ff; background: #102239; } .evidence strong { display: block; margin-bottom: 5px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; } button.action { border: 0; border-radius: 9px; padding: 10px 13px; color: #061321; background: #8ac8ff; font-weight: 750; cursor: pointer; } button.action.secondary { color: #d9e7f8; background: #263c59; }
+    #notice { min-height: 24px; margin-top: 14px; color: #83e6ae; font-size: .85rem; } @media (max-width: 820px) { main { grid-template-columns: 1fr; } header { align-items: start; flex-direction: column; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div><p class="eyebrow">Treasury payments · live operating view</p><h1>Payment Operations Control Tower</h1></div>
+    <p class="health">● Demo ledger connected · sandbox effectors</p>
+  </header>
+  <main>
+    <section class="panel" aria-labelledby="queue-title">
+      <div class="panel-head"><h2 id="queue-title">Repair queue</h2><span class="muted">3 in-flight cases</span></div>
+      <div id="queue" class="queue"></div>
+    </section>
+    <aside class="panel" aria-labelledby="detail-title"><div class="panel-head"><h2 id="detail-title">Case detail</h2><span id="case-status" class="badge amber"></span></div><div id="detail" class="detail"></div></aside>
+  </main>
+  <script>
+    const cases = [
+      { id: "WIRE-8802", customer: "Ridgeline Construction LLC", amount: "$84,500", status: "AUTO_APPLY_PENDING", badge: "green", cutoff: "17:00", confidence: "0.96", gate: "Clear", evidence: "Known counterparty history", proposal: "Beneficiary name → PACIFIC STEEL & SUPPLY", actions: [] },
+      { id: "WIRE-8841", customer: "Ridgeline Construction LLC", amount: "$2,450,000", status: "HUMAN_APPROVAL_REQUIRED", badge: "amber", cutoff: "17:00", confidence: "0.91", gate: "G1", evidence: "Prior account lookup · account change", proposal: "Beneficiary account → 4628492309", actions: ["approve", "edit", "reject", "escalate"] },
+      { id: "WIRE-8877", customer: "Northgate Property Partners", amount: "$615,000", status: "CALLBACK_REQUIRED", badge: "blue", cutoff: "17:00", confidence: "0.74", gate: "G9", evidence: "Callback transcript required", proposal: "Awaiting customer confirmation", actions: ["provide_info", "reject", "escalate"] }
+    ];
+    let selected = cases[1];
+    const queue = document.querySelector("#queue"), detail = document.querySelector("#detail"), status = document.querySelector("#case-status");
+    const title = (value) => value.replaceAll("_", " ").toLowerCase().replace(/(^| )\w/g, (c) => c.toUpperCase());
+    function renderQueue() { queue.innerHTML = cases.map((item) => `<button class="case ${item.id === selected.id ? "selected" : ""}" data-id="${item.id}"><div class="case-top"><span class="case-id">${item.id}</span><span class="badge ${item.badge}">${title(item.status)}</span></div><div class="case-bottom"><span>${item.customer}</span><span class="amount">${item.amount}</span></div></button>`).join(""); queue.querySelectorAll(".case").forEach((button) => button.onclick = () => { selected = cases.find((item) => item.id === button.dataset.id); render(); }); }
+    function renderDetail() { status.className = `badge ${selected.badge}`; status.textContent = title(selected.status); detail.innerHTML = `<h2>${selected.id}</h2><p class="muted">${selected.customer}</p><div class="detail-grid"><div class="metric"><div class="metric-label">Amount</div><div class="metric-value">${selected.amount}</div></div><div class="metric"><div class="metric-label">Cutoff</div><div class="metric-value">${selected.cutoff}</div></div><div class="metric"><div class="metric-label">Confidence</div><div class="metric-value">${selected.confidence}</div></div><div class="metric"><div class="metric-label">Gate</div><div class="metric-value">${selected.gate}</div></div></div><div class="evidence"><strong>Evidence packet</strong><span class="muted">${selected.evidence}</span><br /><span>${selected.proposal}</span></div><div class="actions">${selected.actions.map((action) => `<button class="action ${action === "reject" || action === "escalate" ? "secondary" : ""}" data-action="${action}">${title(action)}</button>`).join("")}</div><div id="notice" role="status"></div>`; detail.querySelectorAll("button").forEach((button) => button.onclick = () => { document.querySelector("#notice").textContent = `${title(button.dataset.action)} recorded for ${selected.id}; sandbox effector only, no payment write performed.`; }); }
+    function render() { renderQueue(); renderDetail(); } render();
+  </script>
+</body>
+</html>

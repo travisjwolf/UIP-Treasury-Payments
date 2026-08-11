@@ -1,0 +1,37 @@
+{
+  "docVersion": "1.0.0",
+  "resource": {
+    "name": "WireRepair",
+    "kind": "process",
+    "type": "flow",
+    "apiVersion": "orchestrator.uipath.com/v1",
+    "projectKey": "2005eaac-dd72-45ab-a213-66e9fcdecdbe",
+    "dependencies": [
+      {
+        "kind": "package",
+        "name": "WireRepair"
+      }
+    ],
+    "runtimeDependencies": [],
+    "folders": [
+      {
+        "fullyQualifiedName": "solution_folder"
+      }
+    ],
+    "spec": {
+      "type": "Flow",
+      "name": "WireRepair",
+      "package": {
+        "key": "58d4d0f6-934c-427d-8389-93e7f88a8b0b"
+      },
+      "targetFrameworkValue": "Portable",
+      "retentionAction": "Delete",
+      "retentionPeriod": 30,
+      "staleRetentionAction": "Delete",
+      "staleRetentionPeriod": 180
+    },
+    "locks": [],
+    "key": "7e4cf389-fe20-420c-a5e2-20476c22f964",
+    "files": []
+  }
+}
