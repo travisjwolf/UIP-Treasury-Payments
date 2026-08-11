@@ -1,0 +1,26 @@
+{
+  "$schema": "https://cloud.uipath.com/draft/2024-12/uipath",
+  "id": "541321ee-dcbe-4450-a94b-cda9db8695b4",
+  "runtimeOptions": {
+    "isConversational": false
+  },
+  "packOptions": {
+    "fileExtensionsIncluded": [],
+    "filesIncluded": [],
+    "filesExcluded": [
+      ".env",
+      "AGENTS.md",
+      "CLAUDE.md"
+    ],
+    "directoriesExcluded": [
+      ".agent",
+      ".uipath",
+      ".venv",
+      "__pycache__",
+      "__uipath"
+    ],
+    "includeUvLock": true
+  },
+  "functions": {},
+  "agents": {}
+}
