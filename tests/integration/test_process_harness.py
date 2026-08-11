@@ -1,4 +1,7 @@
+import json
 from pathlib import Path
+import subprocess
+import sys
 
 from src.apps.action_center import EscalationPayload
 from src.contracts.fixture_io import load_case_files
@@ -9,6 +12,14 @@ from src.maestro.process import PaymentProcess
 
 
 ROOT = Path(__file__).resolve().parents[2]
+FLOW_PATH = (
+    ROOT
+    / "src"
+    / "maestro"
+    / "TreasuryPaymentControlTower"
+    / "WireRepair"
+    / "WireRepair.flow"
+)
 
 
 def _evidence(case_id: str, content: str) -> list[Evidence]:
@@ -118,3 +129,82 @@ def test_stub_effector_records_requests_without_performing_payment_writes():
     assert result.effector_result.status == "RECORDED"
     assert effector.requests[0].action.proposed_value == "PACIFIC STEEL & SUPPLY"
     assert effector.writes_performed is False
+
+
+def test_process_module_imports_cleanly_in_a_fresh_interpreter():
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from src.maestro.process import PaymentProcess, ProcessResult",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_maestro_flow_scaffold_models_the_control_path():
+    flow = json.loads(FLOW_PATH.read_text(encoding="utf-8"))
+    nodes_by_label = {node["display"]["label"]: node for node in flow["nodes"]}
+
+    expected_types = {
+        "Intake payment": "core.trigger.manual",
+        "Repair agent proposal": "core.logic.mock",
+        "Deterministic policy gate": "core.logic.mock",
+        "Auto-apply eligible?": "core.logic.decision",
+        "Request payment effect": "core.logic.mock",
+        "Create human escalation": "core.logic.mock",
+        "Append case ledger": "core.logic.mock",
+        "Complete payment case": "core.control.end",
+    }
+    assert {
+        label: nodes_by_label[label]["type"] for label in expected_types
+    } == expected_types
+
+    node_ids = {label: nodes_by_label[label]["id"] for label in expected_types}
+    connected = {
+        (edge["sourceNodeId"], edge["sourcePort"], edge["targetNodeId"])
+        for edge in flow["edges"]
+    }
+    assert connected == {
+        (node_ids["Intake payment"], "output", node_ids["Repair agent proposal"]),
+        (
+            node_ids["Repair agent proposal"],
+            "output",
+            node_ids["Deterministic policy gate"],
+        ),
+        (
+            node_ids["Deterministic policy gate"],
+            "output",
+            node_ids["Auto-apply eligible?"],
+        ),
+        (
+            node_ids["Auto-apply eligible?"],
+            "true",
+            node_ids["Request payment effect"],
+        ),
+        (
+            node_ids["Auto-apply eligible?"],
+            "false",
+            node_ids["Create human escalation"],
+        ),
+        (
+            node_ids["Request payment effect"],
+            "output",
+            node_ids["Append case ledger"],
+        ),
+        (
+            node_ids["Create human escalation"],
+            "output",
+            node_ids["Append case ledger"],
+        ),
+        (
+            node_ids["Append case ledger"],
+            "output",
+            node_ids["Complete payment case"],
+        ),
+    }

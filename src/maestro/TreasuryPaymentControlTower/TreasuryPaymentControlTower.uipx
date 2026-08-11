@@ -1,0 +1,12 @@
+{
+  "DocVersion": "1.0.0",
+  "StudioMinVersion": "2025.10.0",
+  "SolutionId": "383c739c-e2e5-4f25-881b-aa3d8c68729b",
+  "Projects": [
+    {
+      "Type": "Flow",
+      "ProjectRelativePath": "WireRepair/project.uiproj",
+      "Id": "2005eaac-dd72-45ab-a213-66e9fcdecdbe"
+    }
+  ]
+}

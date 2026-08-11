@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from src.maestro.process import ProcessResult
+if TYPE_CHECKING:
+    from src.maestro.process import ProcessResult
 
 
 @dataclass(frozen=True)

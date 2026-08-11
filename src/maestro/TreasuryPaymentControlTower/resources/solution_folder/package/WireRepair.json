@@ -1,0 +1,22 @@
+{
+  "docVersion": "1.0.0",
+  "resource": {
+    "name": "WireRepair",
+    "kind": "package",
+    "apiVersion": "orchestrator.uipath.com/v1",
+    "projectKey": "2005eaac-dd72-45ab-a213-66e9fcdecdbe",
+    "dependencies": [],
+    "runtimeDependencies": [],
+    "folders": [
+      {
+        "fullyQualifiedName": "solution_folder"
+      }
+    ],
+    "spec": {
+      "name": "WireRepair"
+    },
+    "locks": [],
+    "key": "58d4d0f6-934c-427d-8389-93e7f88a8b0b",
+    "files": []
+  }
+}
