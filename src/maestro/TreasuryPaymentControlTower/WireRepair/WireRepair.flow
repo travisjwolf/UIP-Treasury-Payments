@@ -17,21 +17,28 @@
     },
     {
       "id": "repairAgent",
-      "type": "core.logic.mock",
-      "typeVersion": "1.0",
+      "type": "uipath.core.agent.ee894252-e868-4de2-a8b2-2b29ba8efd07",
+      "typeVersion": "1.0.0",
       "display": {
-        "label": "Repair agent proposal"
+        "label": "Bravo repair agent",
+        "icon": "coded-agent"
       },
-      "inputs": {}
+      "inputs": {
+        "payment_case": "=js:$vars.start.output.payment_case",
+        "gate_context": "=js:$vars.start.output.gate_context",
+        "demo_role": "=js:$vars.start.output.demo_role"
+      }
     },
     {
       "id": "policyGate",
-      "type": "core.logic.mock",
+      "type": "core.action.script",
       "typeVersion": "1.0",
       "display": {
         "label": "Deterministic policy gate"
       },
-      "inputs": {}
+      "inputs": {
+        "script": "const payment = $vars.start.output.payment_case; const context = $vars.start.output.gate_context; const config = $vars.start.output.policy_config; const agent = $vars.repairAgent.output; if (!payment || !context || !config || !agent) { throw new Error(\"PaymentCase, GateContext, PolicyConfig, and AgentOutput are required.\"); } if (config.customer_id !== payment.customer_id) { throw new Error(\"PolicyConfig.customer_id must match PaymentCase.customer_id\"); } const decide = (gate, result, reason) => ({ case_id: payment.case_id, gate, result, reason, evaluated_at: context.evaluated_at }); if (context.sanctions_status !== \"clear\") return decide(\"G0\", \"COMPLIANCE_REFERRAL\", \"G0 sanctions status is not clear.\"); const proposal = agent.proposed_action; if (proposal) { if (proposal.field === \"beneficiary_account\") return decide(\"G1\", \"HUMAN_APPROVAL\", \"G1 proposed repair changes the beneficiary account.\"); if ([\"amount_usd\", \"currency\"].includes(proposal.field)) return decide(\"G2\", \"HARD_STOP\", \"G2 proposed repair changes an amount or currency field.\"); if (payment.amount_usd > config.auto_apply_amount_threshold_usd) return decide(\"G3\", \"HUMAN_APPROVAL\", \"G3 payment amount exceeds the auto-apply threshold.\"); if (context.first_time_counterparty) return decide(\"G4\", \"HUMAN_APPROVAL\", \"G4 counterparty has no established payment history.\"); if (agent.confidence < config.minimum_confidence) return decide(\"G5\", \"HUMAN_APPROVAL\", \"G5 proposal confidence is below the configured minimum.\"); if (context.cross_border || payment.currency !== \"USD\") return decide(\"G6\", \"HUMAN_APPROVAL\", \"G6 payment is cross-border or denominated outside USD.\"); if (payment.exception_code === \"EX-07\") return decide(\"G7\", \"HUMAN_APPROVAL\", \"G7 payment is marked as a duplicate suspect.\"); if (context.same_day_beneficiary_total_usd > config.same_day_beneficiary_velocity_threshold_usd) return decide(\"G8\", \"HUMAN_APPROVAL\", \"G8 beneficiary same-day value exceeds the velocity threshold.\"); } if (agent.outcome === \"NEEDS_INFO\") return decide(\"G9\", \"CALLBACK_THEN_HUMAN\", \"G9 agent needs additional information before a repair can proceed.\"); if ([\"AMBIGUOUS\", \"EXHAUSTED\"].includes(agent.outcome)) return decide(\"G9\", \"ESCALATE\", \"G9 agent outcome requires escalation with its full trace.\"); if ((new Date(context.cutoff_at).getTime() - new Date(context.evaluated_at).getTime()) < config.cutoff_escalation_minutes * 60000) return decide(\"G10\", \"PRIORITY_ESCALATION\", \"G10 remaining cutoff time is inside the priority escalation window.\"); if (agent.outcome === \"BLOCKED_POLICY\") return decide(null, \"ESCALATE\", \"Agent reported a policy block not explained by an earlier deterministic gate.\"); return decide(null, \"AUTO_APPLY\", \"No deterministic policy gate fired; the repair is eligible for auto-apply.\");"
+      }
     },
     {
       "id": "routeDecision",
@@ -41,37 +48,282 @@
         "label": "Auto-apply eligible?"
       },
       "inputs": {
-        "expression": "$vars.start.output.autoApply === true",
-        "trueLabel": "Effect",
-        "falseLabel": "Human"
+        "expression": "$vars.policyGate.output.result === \"AUTO_APPLY\"",
+        "trueLabel": "Authorized sandbox effect",
+        "falseLabel": "Human or terminal policy path"
       }
     },
     {
-      "id": "effectRequest",
-      "type": "core.logic.mock",
+      "id": "autoEffect",
+      "type": "core.action.script",
       "typeVersion": "1.0",
       "display": {
-        "label": "Request payment effect"
+        "label": "Record authorized sandbox effect"
       },
-      "inputs": {}
+      "inputs": {
+        "script": "const payment = $vars.start.output.payment_case; const proposal = $vars.repairAgent.output.proposed_action; const evidence = $vars.repairAgent.output.evidence; const decision = $vars.policyGate.output; if (decision.result !== \"AUTO_APPLY\" || !proposal) throw new Error(\"Deterministic AUTO_APPLY authorization and a proposal are required.\"); if ([\"beneficiary_account\", \"amount_usd\", \"currency\"].includes(proposal.field)) throw new Error(\"The proposed field is not eligible for autonomous application.\"); if (payment[proposal.field] !== proposal.current_value) throw new Error(\"Proposal current_value does not match the payment record.\"); if (evidence.some((item) => item.case_id !== payment.case_id)) throw new Error(\"Evidence case_id must match the payment record.\"); const content = (item) => { if (typeof item.content !== \"string\") return item.content; try { return JSON.parse(item.content); } catch { return item.content; } }; const contains = (value, expected) => value === expected || (Array.isArray(value) && value.some((item) => contains(item, expected))) || (value && typeof value === \"object\" && Object.values(value).some((item) => contains(item, expected))); if (!evidence.some((item) => contains(content(item), proposal.proposed_value))) throw new Error(\"Proposed value must be traceable to evidence.\"); return { case_id: payment.case_id, status: \"RECORDED\", audit: { field: proposal.field, before: proposal.current_value, after: proposal.proposed_value, credential_identity: \"sandbox://wire-repair-effector\", authorization_mode: \"auto_apply\", authorized_by: \"deterministic-policy-gate\", gate: decision.gate || \"NONE\", recorded_at: $vars.start.output.gate_context.evaluated_at, payment_write_performed: false } };"
+      }
+    },
+    {
+      "id": "autoLedger",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Append auto-apply ledger"
+      },
+      "inputs": {
+        "script": "return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTO_APPLY_AUTHORIZED\", \"EFFECT_RECORDED\", \"CASE_STATE_UPDATED\"], effect: $vars.autoEffect.output, payment_write_performed: false };"
+      }
+    },
+    {
+      "id": "humanTaskEligible",
+      "type": "core.logic.decision",
+      "typeVersion": "1.0.0",
+      "display": {
+        "label": "In-app human task permitted?"
+      },
+      "inputs": {
+        "expression": "[\"HUMAN_APPROVAL\", \"CALLBACK_THEN_HUMAN\", \"PRIORITY_ESCALATION\", \"ESCALATE\"].includes($vars.policyGate.output.result)",
+        "trueLabel": "Create human task",
+        "falseLabel": "Non-overridable terminal path"
+      }
+    },
+    {
+      "id": "terminalLedger",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Append terminal policy ledger"
+      },
+      "inputs": {
+        "script": "const decision = $vars.policyGate.output; const terminal = decision.result === \"COMPLIANCE_REFERRAL\" ? \"COMPLIANCE_REFERRAL_CREATED\" : \"POLICY_HARD_STOP_RECORDED\"; return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", terminal, \"CASE_STATE_UPDATED\"], gate: decision.gate, reason: decision.reason, overridable_in_app: false, payment_write_performed: false };"
+      }
+    },
+    {
+      "id": "escalationPacket",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Build exact escalation packet"
+      },
+      "inputs": {
+        "script": "const payment = $vars.start.output.payment_case; const agent = $vars.repairAgent.output; const decision = $vars.policyGate.output; const callback = decision.result === \"CALLBACK_THEN_HUMAN\"; return { payment, proposal: agent.proposed_action, gate: decision.gate || \"NONE\", reason: decision.reason, evidence: agent.evidence, cutoff_time: payment.cutoff_time, permitted_actions: callback ? [\"provide_info\", \"approve\", \"reject\", \"escalate\"] : [\"approve\", \"edit\", \"reject\", \"escalate\"] };"
+      }
+    },
+    {
+      "id": "taskProjection",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Project readable task fields"
+      },
+      "inputs": {
+        "script": "const packet = $vars.escalationPacket.output; const payment = packet.payment; const proposal = packet.proposal; return { payment: `${payment.case_id} | ${payment.customer_name} | ${payment.amount_usd} ${payment.currency} | ${payment.beneficiary_name} | account ${payment.beneficiary_account}`, proposalField: proposal ? proposal.field : \"No proposed field\", currentValue: proposal ? String(proposal.current_value) : \"\", proposedValue: proposal ? String(proposal.proposed_value) : \"\", gate: packet.gate, reason: packet.reason, evidence: JSON.stringify(packet.evidence, null, 2), cutoff: packet.cutoff_time, permittedActions: packet.permitted_actions.join(\", \") };"
+      }
     },
     {
       "id": "humanEscalation",
-      "type": "core.logic.mock",
+      "type": "uipath.human-in-the-loop",
       "typeVersion": "1.0",
       "display": {
-        "label": "Create human escalation"
+        "label": "Wire repair approval"
       },
-      "inputs": {}
+      "inputs": {
+        "type": "quick",
+        "title": "Wire repair approval",
+        "recipient": {
+          "channels": [
+            "Email",
+            "ActionCenter"
+          ],
+          "connections": {},
+          "assignee": {
+            "type": "group"
+          }
+        },
+        "priority": "High",
+        "schema": {
+          "schemaId": "5a406b2e-cd6e-4aac-b1ee-b360928a0fc2",
+          "fields": [
+            {
+              "id": "payment",
+              "label": "Payment",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.payment"
+            },
+            {
+              "id": "proposalfield",
+              "label": "Proposed Field",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.proposalField"
+            },
+            {
+              "id": "currentvalue",
+              "label": "Current Value",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.currentValue"
+            },
+            {
+              "id": "proposedvalue",
+              "label": "Proposed Value",
+              "type": "text",
+              "direction": "inOut",
+              "binding": "vars.taskProjection.output.proposedValue",
+              "variable": "reviewedProposedValue"
+            },
+            {
+              "id": "gate",
+              "label": "Deterministic Gate",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.gate"
+            },
+            {
+              "id": "reason",
+              "label": "Why Autonomy Was Refused",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.reason"
+            },
+            {
+              "id": "evidence",
+              "label": "Evidence Packet",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.evidence"
+            },
+            {
+              "id": "cutoff",
+              "label": "Rail Cutoff",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.cutoff"
+            },
+            {
+              "id": "permittedactions",
+              "label": "Permitted Actions",
+              "type": "text",
+              "direction": "input",
+              "binding": "vars.taskProjection.output.permittedActions"
+            }
+          ],
+          "outcomes": [
+            {
+              "id": "approve",
+              "name": "Approve",
+              "type": "string",
+              "isPrimary": true,
+              "action": "Continue"
+            },
+            {
+              "id": "edit",
+              "name": "Edit",
+              "type": "string",
+              "isPrimary": false,
+              "action": "Continue"
+            },
+            {
+              "id": "reject",
+              "name": "Reject",
+              "type": "string",
+              "isPrimary": false,
+              "action": "End"
+            },
+            {
+              "id": "escalate",
+              "name": "Escalate",
+              "type": "string",
+              "isPrimary": false,
+              "action": "End"
+            }
+          ]
+        }
+      },
+      "outputs": {
+        "output": {
+          "type": "object",
+          "description": "Task result data",
+          "source": "=result",
+          "var": "output",
+          "properties": {
+            "proposedvalue": {
+              "type": "string"
+            },
+            "Action": {
+              "type": "string",
+              "enum": [
+                "Approve",
+                "Edit",
+                "Reject",
+                "Escalate"
+              ],
+              "default": "Approve"
+            }
+          }
+        },
+        "status": {
+          "type": "string",
+          "description": "Task completion status",
+          "source": "=result.Action",
+          "var": "status",
+          "enum": [
+            "Approve",
+            "Edit",
+            "Reject",
+            "Escalate"
+          ],
+          "default": "Approve"
+        }
+      }
     },
     {
-      "id": "caseLedger",
-      "type": "core.logic.mock",
+      "id": "humanApprovalDecision",
+      "type": "core.logic.decision",
+      "typeVersion": "1.0.0",
+      "display": {
+        "label": "Human authorized effect?"
+      },
+      "inputs": {
+        "expression": "[\"Approve\", \"Edit\"].includes($vars.humanEscalation.status)",
+        "trueLabel": "Authorized",
+        "falseLabel": "No effect"
+      }
+    },
+    {
+      "id": "humanEffect",
+      "type": "core.action.script",
       "typeVersion": "1.0",
       "display": {
-        "label": "Append case ledger"
+        "label": "Record human-authorized sandbox effect"
       },
-      "inputs": {}
+      "inputs": {
+        "script": "const payment = $vars.start.output.payment_case; const original = $vars.escalationPacket.output.proposal; const evidence = $vars.escalationPacket.output.evidence; const decision = $vars.policyGate.output; const action = $vars.humanEscalation.status; if (![\"Approve\", \"Edit\"].includes(action) || !original) throw new Error(\"Human approval and an original proposal are required.\"); if ([\"G0\", \"G2\"].includes(decision.gate) || [\"amount_usd\", \"currency\"].includes(original.field)) throw new Error(\"The policy path is non-overridable.\"); if (payment[original.field] !== original.current_value) throw new Error(\"Proposal current_value does not match the payment record.\"); if (evidence.some((item) => item.case_id !== payment.case_id)) throw new Error(\"Evidence case_id must match the payment record.\"); const proposed = $vars.humanEscalation.output.proposedvalue; const content = (item) => { if (typeof item.content !== \"string\") return item.content; try { return JSON.parse(item.content); } catch { return item.content; } }; const contains = (value, expected) => value === expected || String(value) === String(expected) || (Array.isArray(value) && value.some((item) => contains(item, expected))) || (value && typeof value === \"object\" && Object.values(value).some((item) => contains(item, expected))); if (!evidence.some((item) => contains(content(item), proposed))) throw new Error(\"Edited value must remain traceable to evidence.\"); return { case_id: payment.case_id, status: \"RECORDED\", audit: { field: original.field, before: original.current_value, after: proposed, credential_identity: \"sandbox://wire-repair-effector\", authorization_mode: \"human_approval\", authorized_by: \"action-center://assigned-reviewer\", gate: decision.gate || \"NONE\", recorded_at: $vars.start.output.gate_context.evaluated_at, payment_write_performed: false } };"
+      }
+    },
+    {
+      "id": "humanEffectLedger",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Append human effect ledger"
+      },
+      "inputs": {
+        "script": "const actionState = $vars.humanEscalation.status === \"Edit\" ? \"HUMAN_EDITED\" : \"HUMAN_APPROVED\"; return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", \"HUMAN_ESCALATION_CREATED\", actionState, \"EFFECT_RECORDED\", \"CASE_STATE_UPDATED\"], effect: $vars.humanEffect.output, payment_write_performed: false };"
+      }
+    },
+    {
+      "id": "humanNoEffectLedger",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Append no-effect human ledger"
+      },
+      "inputs": {
+        "script": "const state = $vars.humanEscalation.status === \"Reject\" ? \"HUMAN_REJECTED\" : \"HUMAN_ESCALATED\"; return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", \"HUMAN_ESCALATION_CREATED\", state, \"CASE_STATE_UPDATED\"], payment_write_performed: false };"
+      }
     },
     {
       "id": "end",
@@ -80,7 +332,12 @@
       "display": {
         "label": "Complete payment case"
       },
-      "inputs": {}
+      "inputs": {},
+      "outputs": {
+        "reviewedProposedValue": {
+          "source": "=js:$vars.reviewedProposedValue"
+        }
+      }
     }
   ],
   "edges": [
@@ -101,7 +358,7 @@
     {
       "id": "edge-gate-route",
       "sourceNodeId": "policyGate",
-      "sourcePort": "output",
+      "sourcePort": "success",
       "targetNodeId": "routeDecision",
       "targetPort": "input"
     },
@@ -109,39 +366,1146 @@
       "id": "edge-route-effect",
       "sourceNodeId": "routeDecision",
       "sourcePort": "true",
-      "targetNodeId": "effectRequest",
+      "targetNodeId": "autoEffect",
       "targetPort": "input"
     },
     {
-      "id": "edge-route-human",
+      "id": "edge-auto-effect-ledger",
+      "sourceNodeId": "autoEffect",
+      "sourcePort": "success",
+      "targetNodeId": "autoLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-auto-ledger-end",
+      "sourceNodeId": "autoLedger",
+      "sourcePort": "success",
+      "targetNodeId": "end",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-route-human-eligibility",
       "sourceNodeId": "routeDecision",
       "sourcePort": "false",
+      "targetNodeId": "humanTaskEligible",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-eligible-terminal",
+      "sourceNodeId": "humanTaskEligible",
+      "sourcePort": "false",
+      "targetNodeId": "terminalLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-terminal-end",
+      "sourceNodeId": "terminalLedger",
+      "sourcePort": "success",
+      "targetNodeId": "end",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-eligible-packet",
+      "sourceNodeId": "humanTaskEligible",
+      "sourcePort": "true",
+      "targetNodeId": "escalationPacket",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-packet-projection",
+      "sourceNodeId": "escalationPacket",
+      "sourcePort": "success",
+      "targetNodeId": "taskProjection",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-projection-human",
+      "sourceNodeId": "taskProjection",
+      "sourcePort": "success",
       "targetNodeId": "humanEscalation",
       "targetPort": "input"
     },
     {
-      "id": "edge-effect-ledger",
-      "sourceNodeId": "effectRequest",
-      "sourcePort": "output",
-      "targetNodeId": "caseLedger",
-      "targetPort": "input"
-    },
-    {
-      "id": "edge-human-ledger",
+      "id": "edge-human-completed-decision",
       "sourceNodeId": "humanEscalation",
-      "sourcePort": "output",
-      "targetNodeId": "caseLedger",
+      "sourcePort": "completed",
+      "targetNodeId": "humanApprovalDecision",
       "targetPort": "input"
     },
     {
-      "id": "edge-ledger-end",
-      "sourceNodeId": "caseLedger",
-      "sourcePort": "output",
+      "id": "edge-human-authorized-effect",
+      "sourceNodeId": "humanApprovalDecision",
+      "sourcePort": "true",
+      "targetNodeId": "humanEffect",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-human-effect-ledger",
+      "sourceNodeId": "humanEffect",
+      "sourcePort": "success",
+      "targetNodeId": "humanEffectLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-human-effect-ledger-end",
+      "sourceNodeId": "humanEffectLedger",
+      "sourcePort": "success",
+      "targetNodeId": "end",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-human-no-effect-ledger",
+      "sourceNodeId": "humanApprovalDecision",
+      "sourcePort": "false",
+      "targetNodeId": "humanNoEffectLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-human-no-effect-ledger-end",
+      "sourceNodeId": "humanNoEffectLedger",
+      "sourcePort": "success",
       "targetNodeId": "end",
       "targetPort": "input"
     }
   ],
   "definitions": [
+    {
+      "nodeType": "uipath.core.agent.ee894252-e868-4de2-a8b2-2b29ba8efd07",
+      "version": "1.0.0",
+      "category": "agent",
+      "runtimeConstraints": {
+        "exclude": [
+          "api-function"
+        ]
+      },
+      "description": "(In-solution) wire-repair-agent",
+      "tags": [
+        "in-solution",
+        "local"
+      ],
+      "sortOrder": 505,
+      "supportsErrorHandling": true,
+      "display": {
+        "label": "wire-repair-agent",
+        "icon": "autonomous-agent"
+      },
+      "handleConfiguration": [
+        {
+          "position": "left",
+          "handles": [
+            {
+              "id": "input",
+              "type": "target",
+              "handleType": "input"
+            }
+          ]
+        },
+        {
+          "position": "right",
+          "handles": [
+            {
+              "id": "output",
+              "type": "source",
+              "handleType": "output"
+            }
+          ]
+        }
+      ],
+      "toolbarExtensions": {
+        "design": {
+          "actions": [
+            {
+              "id": "open-workflow",
+              "icon": "external-link",
+              "label": "Open"
+            }
+          ]
+        }
+      },
+      "projectId": "f5126a0b-1836-4aa7-bd7b-0430dc7f5a08",
+      "model": {
+        "type": "bpmn:ServiceTask",
+        "serviceType": "Orchestrator.StartAgentJob",
+        "version": "v2",
+        "bindings": {
+          "resource": "process",
+          "resourceSubType": "Agent",
+          "resourceKey": "ee894252-e868-4de2-a8b2-2b29ba8efd07",
+          "orchestratorType": "agent",
+          "values": [
+            {
+              "name": "name",
+              "propertyAttribute": "name",
+              "default": "wire-repair-agent"
+            },
+            {
+              "name": "folderPath",
+              "propertyAttribute": "folderPath",
+              "default": ""
+            }
+          ]
+        },
+        "projectId": "f5126a0b-1836-4aa7-bd7b-0430dc7f5a08",
+        "projectName": "wire-repair-agent",
+        "context": [
+          {
+            "name": "name",
+            "type": "string",
+            "value": "<bindings.name>"
+          },
+          {
+            "name": "folderPath",
+            "type": "string",
+            "value": "<bindings.folderPath>"
+          },
+          {
+            "name": "_label",
+            "type": "string",
+            "value": "wire-repair-agent"
+          }
+        ]
+      },
+      "form": {
+        "id": "activity-properties",
+        "title": "Agent",
+        "sections": [
+          {
+            "id": "inputs",
+            "title": "Inputs",
+            "collapsible": true,
+            "defaultExpanded": true,
+            "fields": [
+              {
+                "name": "inputs.payment_case",
+                "type": "custom",
+                "component": "object-editor",
+                "label": "payment_case",
+                "componentProps": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "case_id": {
+                        "description": "Unique wire-repair case identifier.",
+                        "minLength": 1,
+                        "title": "Case Id",
+                        "type": "string"
+                      },
+                      "rail": {
+                        "description": "Payment rail, such as Fedwire.",
+                        "minLength": 1,
+                        "title": "Rail",
+                        "type": "string"
+                      },
+                      "direction": {
+                        "description": "Inbound or outbound payment direction.",
+                        "enum": [
+                          "outbound",
+                          "inbound"
+                        ],
+                        "title": "Direction",
+                        "type": "string"
+                      },
+                      "amount_usd": {
+                        "description": "Payment amount normalized to USD.",
+                        "exclusiveMinimum": 0,
+                        "title": "Amount Usd",
+                        "type": "number"
+                      },
+                      "currency": {
+                        "description": "Three-letter ISO currency code on the payment.",
+                        "pattern": "^[A-Z]{3}$",
+                        "title": "Currency",
+                        "type": "string"
+                      },
+                      "value_date": {
+                        "description": "Payment value date in YYYY-MM-DD format.",
+                        "format": "date",
+                        "title": "Value Date",
+                        "type": "string"
+                      },
+                      "cutoff_time": {
+                        "description": "Applicable rail cutoff time in HH:MM format.",
+                        "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?$",
+                        "title": "Cutoff Time",
+                        "type": "string"
+                      },
+                      "sla_deadline": {
+                        "anyOf": [
+                          {
+                            "format": "date-time",
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Optional processing SLA deadline."
+                      },
+                      "source_channel": {
+                        "description": "Channel through which the wire originated.",
+                        "minLength": 1,
+                        "title": "Source Channel",
+                        "type": "string"
+                      },
+                      "customer_id": {
+                        "description": "Commercial customer identifier.",
+                        "minLength": 1,
+                        "title": "Customer Id",
+                        "type": "string"
+                      },
+                      "customer_name": {
+                        "description": "Commercial customer display name.",
+                        "minLength": 1,
+                        "title": "Customer Name",
+                        "type": "string"
+                      },
+                      "beneficiary_name": {
+                        "description": "Beneficiary name currently on the wire.",
+                        "minLength": 1,
+                        "title": "Beneficiary Name",
+                        "type": "string"
+                      },
+                      "beneficiary_account": {
+                        "description": "Beneficiary account currently on the wire.",
+                        "minLength": 1,
+                        "title": "Beneficiary Account",
+                        "type": "string"
+                      },
+                      "beneficiary_bank_aba": {
+                        "description": "Beneficiary bank ABA routing number.",
+                        "minLength": 1,
+                        "title": "Beneficiary Bank Aba",
+                        "type": "string"
+                      },
+                      "remittance_info": {
+                        "description": "Wire remittance or invoice information.",
+                        "title": "Remittance Info",
+                        "type": "string"
+                      },
+                      "exception_code": {
+                        "description": "Intake exception code requiring repair.",
+                        "pattern": "^EX-\\d{2}$",
+                        "title": "Exception Code",
+                        "type": "string"
+                      },
+                      "exception_type": {
+                        "description": "Human-readable intake exception category.",
+                        "minLength": 1,
+                        "title": "Exception Type",
+                        "type": "string"
+                      },
+                      "current_queue": {
+                        "description": "Current operations queue.",
+                        "minLength": 1,
+                        "title": "Current Queue",
+                        "type": "string"
+                      },
+                      "status": {
+                        "description": "Current payment-processing status.",
+                        "minLength": 1,
+                        "title": "Status",
+                        "type": "string"
+                      },
+                      "worked_by": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Current analyst or automation owner."
+                      },
+                      "confidence": {
+                        "anyOf": [
+                          {
+                            "maximum": 1,
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Existing repair confidence, when already calculated."
+                      },
+                      "proposed_action": {
+                        "anyOf": [
+                          {
+                            "additionalProperties": false,
+                            "properties": {
+                              "field": {
+                                "description": "Payment field that the agent proposes changing.",
+                                "enum": [
+                                  "amount_usd",
+                                  "beneficiary_account",
+                                  "beneficiary_bank_aba",
+                                  "beneficiary_name",
+                                  "currency",
+                                  "customer_name",
+                                  "remittance_info"
+                                ],
+                                "title": "Field",
+                                "type": "string"
+                              },
+                              "current_value": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "description": "Value currently present on the payment.",
+                                "title": "Current Value"
+                              },
+                              "proposed_value": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "integer"
+                                  },
+                                  {
+                                    "type": "number"
+                                  }
+                                ],
+                                "description": "Replacement value copied from cited read-only evidence.",
+                                "title": "Proposed Value"
+                              }
+                            },
+                            "required": [
+                              "field",
+                              "current_value",
+                              "proposed_value"
+                            ],
+                            "title": "ProposedActionOutput",
+                            "type": "object"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Existing proposed action, when already calculated."
+                      },
+                      "outcome": {
+                        "anyOf": [
+                          {
+                            "enum": [
+                              "RESOLVED",
+                              "RESOLVED_LOW_CONFIDENCE",
+                              "AMBIGUOUS",
+                              "NEEDS_INFO",
+                              "EXHAUSTED",
+                              "BLOCKED_POLICY"
+                            ],
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Existing closed-set repair outcome, when already assigned."
+                      },
+                      "touch_count": {
+                        "default": 0,
+                        "description": "Number of prior human or automation touches.",
+                        "minimum": 0,
+                        "title": "Touch Count",
+                        "type": "integer"
+                      },
+                      "cycle_time": {
+                        "anyOf": [
+                          {
+                            "minimum": 0,
+                            "type": "number"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ],
+                        "description": "Elapsed repair cycle time, when available."
+                      }
+                    },
+                    "required": [
+                      "case_id",
+                      "rail",
+                      "direction",
+                      "amount_usd",
+                      "currency",
+                      "value_date",
+                      "cutoff_time",
+                      "source_channel",
+                      "customer_id",
+                      "customer_name",
+                      "beneficiary_name",
+                      "beneficiary_account",
+                      "beneficiary_bank_aba",
+                      "remittance_info",
+                      "exception_code",
+                      "exception_type",
+                      "current_queue",
+                      "status"
+                    ],
+                    "title": "PaymentInput",
+                    "type": "object",
+                    "description": "Typed payment record supplied by the repair queue."
+                  }
+                }
+              },
+              {
+                "name": "inputs.gate_context",
+                "type": "custom",
+                "component": "object-editor",
+                "label": "gate_context",
+                "componentProps": {
+                  "schema": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "sanctions_status": {
+                        "description": "Current sanctions-screening result for deterministic gate G0.",
+                        "enum": [
+                          "clear",
+                          "review",
+                          "match",
+                          "unknown"
+                        ],
+                        "title": "Sanctions Status",
+                        "type": "string"
+                      },
+                      "first_time_counterparty": {
+                        "description": "Whether this is the customer's first payment to the counterparty.",
+                        "title": "First Time Counterparty",
+                        "type": "boolean"
+                      },
+                      "same_day_beneficiary_total_usd": {
+                        "description": "Same-day USD total used by the deterministic velocity gate.",
+                        "minimum": 0,
+                        "title": "Same Day Beneficiary Total Usd",
+                        "type": "number"
+                      },
+                      "cross_border": {
+                        "description": "Whether the payment crosses a national border.",
+                        "title": "Cross Border",
+                        "type": "boolean"
+                      },
+                      "evaluated_at": {
+                        "description": "ISO-8601 time at which the gate context was evaluated.",
+                        "format": "date-time",
+                        "title": "Evaluated At",
+                        "type": "string"
+                      },
+                      "cutoff_at": {
+                        "description": "ISO-8601 payment-rail cutoff timestamp.",
+                        "format": "date-time",
+                        "title": "Cutoff At",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "sanctions_status",
+                      "first_time_counterparty",
+                      "same_day_beneficiary_total_usd",
+                      "cross_border",
+                      "evaluated_at",
+                      "cutoff_at"
+                    ],
+                    "title": "GateContextInput",
+                    "type": "object",
+                    "description": "Typed context reserved for the separate deterministic gate layer."
+                  }
+                }
+              },
+              {
+                "name": "inputs.demo_role",
+                "type": "text",
+                "label": "demo_role"
+              }
+            ]
+          }
+        ]
+      },
+      "inputDefinition": {
+        "type": "object",
+        "properties": {
+          "payment_case": {
+            "additionalProperties": false,
+            "properties": {
+              "case_id": {
+                "description": "Unique wire-repair case identifier.",
+                "minLength": 1,
+                "title": "Case Id",
+                "type": "string"
+              },
+              "rail": {
+                "description": "Payment rail, such as Fedwire.",
+                "minLength": 1,
+                "title": "Rail",
+                "type": "string"
+              },
+              "direction": {
+                "description": "Inbound or outbound payment direction.",
+                "enum": [
+                  "outbound",
+                  "inbound"
+                ],
+                "title": "Direction",
+                "type": "string"
+              },
+              "amount_usd": {
+                "description": "Payment amount normalized to USD.",
+                "exclusiveMinimum": 0,
+                "title": "Amount Usd",
+                "type": "number"
+              },
+              "currency": {
+                "description": "Three-letter ISO currency code on the payment.",
+                "pattern": "^[A-Z]{3}$",
+                "title": "Currency",
+                "type": "string"
+              },
+              "value_date": {
+                "description": "Payment value date in YYYY-MM-DD format.",
+                "format": "date",
+                "title": "Value Date",
+                "type": "string"
+              },
+              "cutoff_time": {
+                "description": "Applicable rail cutoff time in HH:MM format.",
+                "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?$",
+                "title": "Cutoff Time",
+                "type": "string"
+              },
+              "sla_deadline": {
+                "anyOf": [
+                  {
+                    "format": "date-time",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Optional processing SLA deadline."
+              },
+              "source_channel": {
+                "description": "Channel through which the wire originated.",
+                "minLength": 1,
+                "title": "Source Channel",
+                "type": "string"
+              },
+              "customer_id": {
+                "description": "Commercial customer identifier.",
+                "minLength": 1,
+                "title": "Customer Id",
+                "type": "string"
+              },
+              "customer_name": {
+                "description": "Commercial customer display name.",
+                "minLength": 1,
+                "title": "Customer Name",
+                "type": "string"
+              },
+              "beneficiary_name": {
+                "description": "Beneficiary name currently on the wire.",
+                "minLength": 1,
+                "title": "Beneficiary Name",
+                "type": "string"
+              },
+              "beneficiary_account": {
+                "description": "Beneficiary account currently on the wire.",
+                "minLength": 1,
+                "title": "Beneficiary Account",
+                "type": "string"
+              },
+              "beneficiary_bank_aba": {
+                "description": "Beneficiary bank ABA routing number.",
+                "minLength": 1,
+                "title": "Beneficiary Bank Aba",
+                "type": "string"
+              },
+              "remittance_info": {
+                "description": "Wire remittance or invoice information.",
+                "title": "Remittance Info",
+                "type": "string"
+              },
+              "exception_code": {
+                "description": "Intake exception code requiring repair.",
+                "pattern": "^EX-\\d{2}$",
+                "title": "Exception Code",
+                "type": "string"
+              },
+              "exception_type": {
+                "description": "Human-readable intake exception category.",
+                "minLength": 1,
+                "title": "Exception Type",
+                "type": "string"
+              },
+              "current_queue": {
+                "description": "Current operations queue.",
+                "minLength": 1,
+                "title": "Current Queue",
+                "type": "string"
+              },
+              "status": {
+                "description": "Current payment-processing status.",
+                "minLength": 1,
+                "title": "Status",
+                "type": "string"
+              },
+              "worked_by": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Current analyst or automation owner."
+              },
+              "confidence": {
+                "anyOf": [
+                  {
+                    "maximum": 1,
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Existing repair confidence, when already calculated."
+              },
+              "proposed_action": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "field": {
+                        "description": "Payment field that the agent proposes changing.",
+                        "enum": [
+                          "amount_usd",
+                          "beneficiary_account",
+                          "beneficiary_bank_aba",
+                          "beneficiary_name",
+                          "currency",
+                          "customer_name",
+                          "remittance_info"
+                        ],
+                        "title": "Field",
+                        "type": "string"
+                      },
+                      "current_value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "Value currently present on the payment.",
+                        "title": "Current Value"
+                      },
+                      "proposed_value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "Replacement value copied from cited read-only evidence.",
+                        "title": "Proposed Value"
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "current_value",
+                      "proposed_value"
+                    ],
+                    "title": "ProposedActionOutput",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Existing proposed action, when already calculated."
+              },
+              "outcome": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "RESOLVED",
+                      "RESOLVED_LOW_CONFIDENCE",
+                      "AMBIGUOUS",
+                      "NEEDS_INFO",
+                      "EXHAUSTED",
+                      "BLOCKED_POLICY"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Existing closed-set repair outcome, when already assigned."
+              },
+              "touch_count": {
+                "default": 0,
+                "description": "Number of prior human or automation touches.",
+                "minimum": 0,
+                "title": "Touch Count",
+                "type": "integer"
+              },
+              "cycle_time": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Elapsed repair cycle time, when available."
+              }
+            },
+            "required": [
+              "case_id",
+              "rail",
+              "direction",
+              "amount_usd",
+              "currency",
+              "value_date",
+              "cutoff_time",
+              "source_channel",
+              "customer_id",
+              "customer_name",
+              "beneficiary_name",
+              "beneficiary_account",
+              "beneficiary_bank_aba",
+              "remittance_info",
+              "exception_code",
+              "exception_type",
+              "current_queue",
+              "status"
+            ],
+            "title": "PaymentInput",
+            "type": "object",
+            "description": "Typed payment record supplied by the repair queue."
+          },
+          "gate_context": {
+            "additionalProperties": false,
+            "properties": {
+              "sanctions_status": {
+                "description": "Current sanctions-screening result for deterministic gate G0.",
+                "enum": [
+                  "clear",
+                  "review",
+                  "match",
+                  "unknown"
+                ],
+                "title": "Sanctions Status",
+                "type": "string"
+              },
+              "first_time_counterparty": {
+                "description": "Whether this is the customer's first payment to the counterparty.",
+                "title": "First Time Counterparty",
+                "type": "boolean"
+              },
+              "same_day_beneficiary_total_usd": {
+                "description": "Same-day USD total used by the deterministic velocity gate.",
+                "minimum": 0,
+                "title": "Same Day Beneficiary Total Usd",
+                "type": "number"
+              },
+              "cross_border": {
+                "description": "Whether the payment crosses a national border.",
+                "title": "Cross Border",
+                "type": "boolean"
+              },
+              "evaluated_at": {
+                "description": "ISO-8601 time at which the gate context was evaluated.",
+                "format": "date-time",
+                "title": "Evaluated At",
+                "type": "string"
+              },
+              "cutoff_at": {
+                "description": "ISO-8601 payment-rail cutoff timestamp.",
+                "format": "date-time",
+                "title": "Cutoff At",
+                "type": "string"
+              }
+            },
+            "required": [
+              "sanctions_status",
+              "first_time_counterparty",
+              "same_day_beneficiary_total_usd",
+              "cross_border",
+              "evaluated_at",
+              "cutoff_at"
+            ],
+            "title": "GateContextInput",
+            "type": "object",
+            "description": "Typed context reserved for the separate deterministic gate layer."
+          },
+          "demo_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional synthetic role used to organize hackathon demo cases."
+          }
+        }
+      },
+      "inputDefaults": {
+        "payment_case": null,
+        "gate_context": null,
+        "demo_role": ""
+      },
+      "outputDefinition": {
+        "output": {
+          "type": "object",
+          "source": "=this",
+          "var": "output",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "outcome": {
+                "description": "Closed-set repair outcome returned to orchestration.",
+                "enum": [
+                  "RESOLVED",
+                  "RESOLVED_LOW_CONFIDENCE",
+                  "AMBIGUOUS",
+                  "NEEDS_INFO",
+                  "EXHAUSTED",
+                  "BLOCKED_POLICY"
+                ],
+                "title": "Outcome",
+                "type": "string"
+              },
+              "proposed_action": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "field": {
+                        "description": "Payment field that the agent proposes changing.",
+                        "enum": [
+                          "amount_usd",
+                          "beneficiary_account",
+                          "beneficiary_bank_aba",
+                          "beneficiary_name",
+                          "currency",
+                          "customer_name",
+                          "remittance_info"
+                        ],
+                        "title": "Field",
+                        "type": "string"
+                      },
+                      "current_value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "Value currently present on the payment.",
+                        "title": "Current Value"
+                      },
+                      "proposed_value": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "number"
+                          }
+                        ],
+                        "description": "Replacement value copied from cited read-only evidence.",
+                        "title": "Proposed Value"
+                      }
+                    },
+                    "required": [
+                      "field",
+                      "current_value",
+                      "proposed_value"
+                    ],
+                    "title": "ProposedActionOutput",
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Evidence-backed repair proposal, or null when none is supportable.",
+                "type": "any"
+              },
+              "confidence": {
+                "description": "Confidence in the proposed repair, between zero and one.",
+                "maximum": 1,
+                "minimum": 0,
+                "title": "Confidence",
+                "type": "number"
+              },
+              "evidence": {
+                "description": "Cumulative read-only evidence trace supporting the result.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "case_id": {
+                      "description": "Wire-repair case identifier for this evidence.",
+                      "minLength": 1,
+                      "title": "Case Id",
+                      "type": "string"
+                    },
+                    "type": {
+                      "description": "Closed evidence category produced by a read-only source.",
+                      "enum": [
+                        "lookup",
+                        "history_match",
+                        "sanctions",
+                        "document",
+                        "call_transcript"
+                      ],
+                      "title": "Type",
+                      "type": "string"
+                    },
+                    "source": {
+                      "description": "Read-only source URI that produced the evidence.",
+                      "minLength": 1,
+                      "title": "Source",
+                      "type": "string"
+                    },
+                    "content": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": true,
+                          "type": "object"
+                        },
+                        {
+                          "type": "string"
+                        }
+                      ],
+                      "description": "Canonical payload returned by the evidence source.",
+                      "title": "Content"
+                    },
+                    "produced_by": {
+                      "description": "Read-only tool that produced this record.",
+                      "minLength": 1,
+                      "title": "Produced By",
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "description": "ISO-8601 timestamp assigned to the evidence.",
+                      "format": "date-time",
+                      "title": "Timestamp",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "case_id",
+                    "type",
+                    "source",
+                    "content",
+                    "produced_by",
+                    "timestamp"
+                  ],
+                  "title": "EvidenceOutput",
+                  "type": "object"
+                },
+                "title": "Evidence",
+                "type": "array"
+              },
+              "reasoning_summary": {
+                "description": "Concise explanation of the evidence and control boundary.",
+                "title": "Reasoning Summary",
+                "type": "string"
+              },
+              "tools_called": {
+                "description": "Read-only tools called, in execution order.",
+                "items": {
+                  "type": "string"
+                },
+                "title": "Tools Called",
+                "type": "array"
+              }
+            }
+          }
+        },
+        "error": {
+          "type": "object",
+          "description": "Error information if the node fails",
+          "source": "=Error",
+          "var": "error",
+          "schema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "code",
+              "message",
+              "detail",
+              "category",
+              "status"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Error code as a string"
+              },
+              "message": {
+                "type": "string",
+                "description": "High-level error message"
+              },
+              "detail": {
+                "type": "string",
+                "description": "Detailed error description"
+              },
+              "category": {
+                "type": "string",
+                "description": "Error category"
+              },
+              "status": {
+                "type": "integer",
+                "description": "HTTP status code"
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "debug": {
+        "runtime": "bpmnEngine"
+      }
+    },
     {
       "nodeType": "core.trigger.manual",
       "version": "1.0",
@@ -202,18 +1566,106 @@
       }
     },
     {
-      "nodeType": "core.logic.mock",
+      "nodeType": "core.action.script",
       "version": "1.0",
-      "category": "control-flow",
-      "description": "Placeholder node for prototyping",
+      "category": "data-operations",
+      "description": "Run custom JavaScript code",
       "tags": [
-        "blank",
-        "todo"
+        "code",
+        "javascript",
+        "python"
       ],
-      "sortOrder": 20,
+      "sortOrder": 35,
+      "supportsErrorHandling": true,
       "display": {
-        "label": "Mock",
-        "icon": "square-dashed"
+        "label": "Script",
+        "icon": "code"
+      },
+      "handleConfiguration": [
+        {
+          "position": "left",
+          "handles": [
+            {
+              "id": "input",
+              "type": "target",
+              "handleType": "input"
+            }
+          ]
+        },
+        {
+          "position": "right",
+          "handles": [
+            {
+              "id": "success",
+              "type": "source",
+              "handleType": "output"
+            },
+            {
+              "id": "error",
+              "label": "Error",
+              "type": "source",
+              "handleType": "output",
+              "visible": "{inputs.errorHandlingEnabled}",
+              "constraints": {
+                "maxConnections": 1
+              }
+            }
+          ]
+        }
+      ],
+      "debug": {
+        "runtime": "clientScript"
+      },
+      "model": {
+        "type": "bpmn:ScriptTask"
+      },
+      "inputDefinition": {
+        "type": "object",
+        "properties": {
+          "script": {
+            "type": "string",
+            "minLength": 1,
+            "errorMessage": "A script function is required",
+            "validationSeverity": "warning"
+          }
+        },
+        "required": [
+          "script"
+        ]
+      },
+      "inputDefaults": {
+        "script": ""
+      },
+      "outputDefinition": {
+        "output": {
+          "type": "object",
+          "description": "The return value of the script",
+          "source": "=result.response",
+          "var": "output"
+        },
+        "error": {
+          "type": "object",
+          "description": "Error information if the node fails",
+          "source": "=Error",
+          "var": "error"
+        }
+      }
+    },
+    {
+      "nodeType": "uipath.human-in-the-loop",
+      "version": "1.0",
+      "category": "human-task",
+      "tags": [
+        "human-task",
+        "hitl",
+        "human-in-the-loop",
+        "approval"
+      ],
+      "sortOrder": 50,
+      "display": {
+        "label": "Human in the Loop",
+        "icon": "users",
+        "shape": "square"
       },
       "handleConfiguration": [
         {
@@ -231,29 +1683,63 @@
           "position": "right",
           "handles": [
             {
-              "id": "output",
+              "id": "completed",
+              "label": "Completed",
               "type": "source",
-              "handleType": "output"
+              "handleType": "output",
+              "showButton": true,
+              "constraints": {
+                "forbiddenTargetCategories": [
+                  "trigger"
+                ]
+              }
             }
           ],
           "visible": true
         }
       ],
       "model": {
-        "type": "bpmn:Task"
+        "type": "bpmn:UserTask",
+        "serviceType": "Actions.HITL"
+      },
+      "inputDefaults": {
+        "type": "quick",
+        "schema": {
+          "fields": [],
+          "outcomes": [
+            {
+              "id": "submit",
+              "name": "Submit",
+              "type": "string",
+              "isPrimary": true,
+              "action": "Continue"
+            }
+          ]
+        },
+        "recipient": {
+          "channels": [
+            "Email",
+            "ActionCenter"
+          ],
+          "connections": {},
+          "assignee": {
+            "type": "group"
+          }
+        }
       },
       "outputDefinition": {
         "output": {
           "type": "object",
-          "description": "Mock output value",
-          "source": "null",
+          "description": "Task result data",
+          "source": "=result",
           "var": "output"
+        },
+        "status": {
+          "type": "string",
+          "description": "Task completion status",
+          "source": "=result.Action",
+          "var": "status"
         }
-      },
-      "runtimeConstraints": {
-        "exclude": [
-          "api-function"
-        ]
       }
     },
     {
@@ -424,16 +1910,68 @@
       }
     }
   ],
-  "bindings": [],
+  "bindings": [
+    {
+      "id": "bRepairAgentName",
+      "name": "name",
+      "type": "string",
+      "resource": "process",
+      "resourceKey": "ee894252-e868-4de2-a8b2-2b29ba8efd07",
+      "default": "wire-repair-agent",
+      "propertyAttribute": "name",
+      "resourceSubType": "Agent"
+    },
+    {
+      "id": "bRepairAgentFolderPath",
+      "name": "folderPath",
+      "type": "string",
+      "resource": "process",
+      "resourceKey": "ee894252-e868-4de2-a8b2-2b29ba8efd07",
+      "propertyAttribute": "folderPath",
+      "resourceSubType": "Agent",
+      "default": ""
+    }
+  ],
   "variables": {
     "globals": [
       {
-        "id": "autoApply",
+        "id": "payment_case",
         "direction": "in",
-        "type": "boolean",
-        "defaultValue": false,
-        "description": "Deterministic gate result: true only when autonomous application is permitted.",
+        "type": "object",
+        "defaultValue": {},
+        "description": "Typed PaymentCase supplied at intake.",
         "triggerNodeId": "start"
+      },
+      {
+        "id": "gate_context",
+        "direction": "in",
+        "type": "object",
+        "defaultValue": {},
+        "description": "Typed deterministic gate context supplied at intake.",
+        "triggerNodeId": "start"
+      },
+      {
+        "id": "policy_config",
+        "direction": "in",
+        "type": "object",
+        "defaultValue": {},
+        "description": "Per-customer G3/G5/G8/G10 thresholds supplied by the policy store.",
+        "triggerNodeId": "start"
+      },
+      {
+        "id": "demo_role",
+        "direction": "in",
+        "type": "string",
+        "defaultValue": "",
+        "description": "Optional synthetic role passed to the read-only repair agent.",
+        "triggerNodeId": "start"
+      },
+      {
+        "id": "reviewedProposedValue",
+        "direction": "inout",
+        "type": "string",
+        "defaultValue": "",
+        "description": "Proposed value returned by the human review task."
       }
     ],
     "nodes": [
@@ -449,19 +1987,242 @@
       {
         "id": "repairAgent.output",
         "type": "object",
-        "description": "Mock output value",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "description": "Closed-set repair outcome returned to orchestration.",
+              "enum": [
+                "RESOLVED",
+                "RESOLVED_LOW_CONFIDENCE",
+                "AMBIGUOUS",
+                "NEEDS_INFO",
+                "EXHAUSTED",
+                "BLOCKED_POLICY"
+              ],
+              "title": "Outcome",
+              "type": "string"
+            },
+            "proposed_action": {
+              "anyOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "field": {
+                      "description": "Payment field that the agent proposes changing.",
+                      "enum": [
+                        "amount_usd",
+                        "beneficiary_account",
+                        "beneficiary_bank_aba",
+                        "beneficiary_name",
+                        "currency",
+                        "customer_name",
+                        "remittance_info"
+                      ],
+                      "title": "Field",
+                      "type": "string"
+                    },
+                    "current_value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "description": "Value currently present on the payment.",
+                      "title": "Current Value"
+                    },
+                    "proposed_value": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "integer"
+                        },
+                        {
+                          "type": "number"
+                        }
+                      ],
+                      "description": "Replacement value copied from cited read-only evidence.",
+                      "title": "Proposed Value"
+                    }
+                  },
+                  "required": [
+                    "field",
+                    "current_value",
+                    "proposed_value"
+                  ],
+                  "title": "ProposedActionOutput",
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Evidence-backed repair proposal, or null when none is supportable.",
+              "type": "any"
+            },
+            "confidence": {
+              "description": "Confidence in the proposed repair, between zero and one.",
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Confidence",
+              "type": "number"
+            },
+            "evidence": {
+              "description": "Cumulative read-only evidence trace supporting the result.",
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "case_id": {
+                    "description": "Wire-repair case identifier for this evidence.",
+                    "minLength": 1,
+                    "title": "Case Id",
+                    "type": "string"
+                  },
+                  "type": {
+                    "description": "Closed evidence category produced by a read-only source.",
+                    "enum": [
+                      "lookup",
+                      "history_match",
+                      "sanctions",
+                      "document",
+                      "call_transcript"
+                    ],
+                    "title": "Type",
+                    "type": "string"
+                  },
+                  "source": {
+                    "description": "Read-only source URI that produced the evidence.",
+                    "minLength": 1,
+                    "title": "Source",
+                    "type": "string"
+                  },
+                  "content": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": true,
+                        "type": "object"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ],
+                    "description": "Canonical payload returned by the evidence source.",
+                    "title": "Content"
+                  },
+                  "produced_by": {
+                    "description": "Read-only tool that produced this record.",
+                    "minLength": 1,
+                    "title": "Produced By",
+                    "type": "string"
+                  },
+                  "timestamp": {
+                    "description": "ISO-8601 timestamp assigned to the evidence.",
+                    "format": "date-time",
+                    "title": "Timestamp",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "case_id",
+                  "type",
+                  "source",
+                  "content",
+                  "produced_by",
+                  "timestamp"
+                ],
+                "title": "EvidenceOutput",
+                "type": "object"
+              },
+              "title": "Evidence",
+              "type": "array"
+            },
+            "reasoning_summary": {
+              "description": "Concise explanation of the evidence and control boundary.",
+              "title": "Reasoning Summary",
+              "type": "string"
+            },
+            "tools_called": {
+              "description": "Read-only tools called, in execution order.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Tools Called",
+              "type": "array"
+            }
+          }
+        },
         "binding": {
           "nodeId": "repairAgent",
           "outputId": "output"
         }
       },
       {
+        "id": "repairAgent.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "schema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "required": [
+            "code",
+            "message",
+            "detail",
+            "category",
+            "status"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "Error code as a string"
+            },
+            "message": {
+              "type": "string",
+              "description": "High-level error message"
+            },
+            "detail": {
+              "type": "string",
+              "description": "Detailed error description"
+            },
+            "category": {
+              "type": "string",
+              "description": "Error category"
+            },
+            "status": {
+              "type": "integer",
+              "description": "HTTP status code"
+            }
+          },
+          "additionalProperties": false
+        },
+        "binding": {
+          "nodeId": "repairAgent",
+          "outputId": "error"
+        }
+      },
+      {
         "id": "policyGate.output",
         "type": "object",
-        "description": "Mock output value",
+        "description": "The return value of the script",
         "binding": {
           "nodeId": "policyGate",
           "outputId": "output"
+        }
+      },
+      {
+        "id": "policyGate.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "policyGate",
+          "outputId": "error"
         }
       },
       {
@@ -483,34 +2244,212 @@
         }
       },
       {
-        "id": "effectRequest.output",
+        "id": "autoEffect.output",
         "type": "object",
-        "description": "Mock output value",
+        "description": "The return value of the script",
         "binding": {
-          "nodeId": "effectRequest",
+          "nodeId": "autoEffect",
           "outputId": "output"
+        }
+      },
+      {
+        "id": "autoEffect.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "autoEffect",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "autoLedger.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "autoLedger",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "autoLedger.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "autoLedger",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "humanTaskEligible.matchedCase",
+        "type": "string",
+        "description": "The label of the matched branch (true/false label)",
+        "binding": {
+          "nodeId": "humanTaskEligible",
+          "outputId": "matchedCase"
+        }
+      },
+      {
+        "id": "humanTaskEligible.matchedCaseId",
+        "type": "string",
+        "description": "The branch that was taken (true or false)",
+        "binding": {
+          "nodeId": "humanTaskEligible",
+          "outputId": "matchedCaseId"
+        }
+      },
+      {
+        "id": "terminalLedger.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "terminalLedger",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "terminalLedger.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "terminalLedger",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "escalationPacket.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "escalationPacket",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "escalationPacket.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "escalationPacket",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "taskProjection.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "taskProjection",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "taskProjection.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "taskProjection",
+          "outputId": "error"
         }
       },
       {
         "id": "humanEscalation.output",
         "type": "object",
-        "description": "Mock output value",
+        "description": "Task result data",
         "binding": {
           "nodeId": "humanEscalation",
           "outputId": "output"
         }
       },
       {
-        "id": "caseLedger.output",
-        "type": "object",
-        "description": "Mock output value",
+        "id": "humanEscalation.status",
+        "type": "string",
+        "description": "Task completion status",
         "binding": {
-          "nodeId": "caseLedger",
+          "nodeId": "humanEscalation",
+          "outputId": "status"
+        }
+      },
+      {
+        "id": "humanApprovalDecision.matchedCase",
+        "type": "string",
+        "description": "The label of the matched branch (true/false label)",
+        "binding": {
+          "nodeId": "humanApprovalDecision",
+          "outputId": "matchedCase"
+        }
+      },
+      {
+        "id": "humanApprovalDecision.matchedCaseId",
+        "type": "string",
+        "description": "The branch that was taken (true or false)",
+        "binding": {
+          "nodeId": "humanApprovalDecision",
+          "outputId": "matchedCaseId"
+        }
+      },
+      {
+        "id": "humanEffect.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "humanEffect",
           "outputId": "output"
+        }
+      },
+      {
+        "id": "humanEffect.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "humanEffect",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "humanEffectLedger.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "humanEffectLedger",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "humanEffectLedger.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "humanEffectLedger",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "humanNoEffectLedger.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "humanNoEffectLedger",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "humanNoEffectLedger.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "humanNoEffectLedger",
+          "outputId": "error"
         }
       }
     ],
-    "variableUpdates": {}
+    "variableUpdates": {
+      "humanEscalation": [
+        {
+          "variableId": "reviewedProposedValue",
+          "expression": "=js:$vars.humanEscalation.output.proposedvalue"
+        }
+      ]
+    }
   },
   "runtime": "maestro",
   "layout": {
@@ -555,10 +2494,60 @@
           "height": 96
         }
       },
-      "effectRequest": {
+      "autoEffect": {
         "position": {
-          "x": 576,
-          "y": -96
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "autoLedger": {
+        "position": {
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "humanTaskEligible": {
+        "position": {
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "terminalLedger": {
+        "position": {
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "escalationPacket": {
+        "position": {
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "taskProjection": {
+        "position": {
+          "x": 1536,
+          "y": 144
         },
         "size": {
           "width": 96,
@@ -567,18 +2556,48 @@
       },
       "humanEscalation": {
         "position": {
-          "x": 576,
-          "y": 96
+          "x": 1152,
+          "y": 48
         },
         "size": {
           "width": 96,
           "height": 96
         }
       },
-      "caseLedger": {
+      "humanApprovalDecision": {
         "position": {
-          "x": 768,
-          "y": -96
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "humanEffect": {
+        "position": {
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "humanEffectLedger": {
+        "position": {
+          "x": 1536,
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "humanNoEffectLedger": {
+        "position": {
+          "x": 1536,
+          "y": 144
         },
         "size": {
           "width": 96,
@@ -588,7 +2607,7 @@
       "end": {
         "position": {
           "x": 960,
-          "y": -96
+          "y": -144
         },
         "size": {
           "width": 96,
