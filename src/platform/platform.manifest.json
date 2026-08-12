@@ -140,8 +140,8 @@
       {"name":"PaymentRepairIntakeQueueName","value_type":"Text","value":"PaymentRepairIntake","scope":"Global","description":"Orchestrator intake queue name."},
       {"name":"PaymentEffectRequestsQueueName","value_type":"Text","value":"PaymentEffectRequests","scope":"Global","description":"Orchestrator effector-request queue name."},
       {"name":"PaymentEscalationsQueueName","value_type":"Text","value":"PaymentEscalations","scope":"Global","description":"Orchestrator escalation queue name."},
-      {"name":"AgentMaxIterations","value_type":"Integer","value":5,"scope":"Global","description":"Hard repair-loop iteration cap."},
-      {"name":"AgentTokenBudget","value_type":"Integer","value":12000,"scope":"Global","description":"Hard repair-loop token budget."},
+      {"name":"AgentMaxIterations","value_type":"Integer","value":3,"scope":"Global","description":"Hard repair-loop iteration cap matching the coded-agent runtime default."},
+      {"name":"AgentTokenBudget","value_type":"Integer","value":1200,"scope":"Global","description":"Hard repair-loop token budget matching the coded-agent runtime default."},
       {"name":"PaymentAutoApplyEnabled","value_type":"Bool","value":true,"scope":"Global","description":"Allows only gate-approved repairs to enter the credentialed effector lane."}
     ]
   },

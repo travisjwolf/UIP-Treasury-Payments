@@ -20,31 +20,78 @@ from src.contracts import (
 
 DEFAULT_MANIFEST_PATH = Path(__file__).with_name("platform.manifest.json")
 _NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_]{2,99}$")
-_RESERVED_PHYSICAL_NAMES = {
-    "case",
-    "class",
-    "else",
-    "from",
-    "group",
-    "id",
-    "if",
-    "index",
-    "key",
-    "new",
-    "object",
-    "order",
-    "public",
-    "return",
-    "role",
-    "select",
-    "status",
-    "table",
-    "then",
-    "timestamp",
-    "type",
-    "user",
-    "where",
-}
+_SQL_RESERVED_NAMES = frozenset(
+    """
+    add all alter and any as asc authorization backup begin between break browse
+    bulk by cascade case check checkpoint close clustered coalesce collate column
+    commit compute constraint contains containstable continue convert create cross
+    current current_date current_time current_timestamp current_user cursor database
+    dbcc deallocate declare default delete deny desc disk distinct distributed double
+    drop dump else end errlvl escape except exec execute exists exit external fetch file
+    fillfactor for foreign freetext freetexttable from full function goto grant group
+    having holdlock identity identity_insert identitycol if in index inner insert
+    intersect into is join key kill left like lineno load merge national nocheck
+    nonclustered not null nullif of off offsets on open opendatasource openquery openrowset
+    openxml option or order outer over percent pivot plan precision primary print proc
+    procedure public raiserror read readtext reconfigure references replication restore
+    restrict return revert revoke right rollback rowcount rowguidcol rule save schema
+    securityaudit select semantickeyphrasetable semanticsimilaritydetailstable
+    semanticsimilaritytable session_user set setuser shutdown some statistics system_user
+    table tablesample textsize then to top tran transaction trigger truncate try_convert
+    tsequal union unique update updatetext use user values varying view waitfor when where
+    while with within writetext
+    """.split()
+)
+_CSHARP_RESERVED_NAMES = frozenset(
+    """
+    abstract as base bool break byte case catch char checked class const continue decimal
+    default delegate do double else enum event explicit extern false finally fixed float
+    for foreach goto if implicit in int interface internal is lock long namespace new
+    null object operator out override params private protected public readonly ref return
+    sbyte sealed short sizeof stackalloc static string struct switch this throw true try
+    typeof uint ulong unchecked unsafe ushort using virtual void volatile while
+    """.split()
+)
+_VISUAL_BASIC_RESERVED_NAMES = frozenset(
+    """
+    addhandler addressof alias and andalso as boolean byref byte byval call case catch
+    cbool cbyte cchar cdate cdec cdbl char cint class clng cobj const continue csbyte
+    cshort csng cstr ctype cuint culng cushort date decimal declare default delegate dim
+    directcast do double each else elseif end endif enum erase error event exit false
+    finally for friend function get gettype getxmlnamespace global gosub goto handles if
+    implements imports in inherits integer interface is isnot let lib like long loop me
+    mod module mustinherit mustoverride mybase myclass namespace narrowing new next not
+    nothing notinheritable notoverridable object of on operator option optional or
+    orelse out overloads overridable overrides paramarray partial private property
+    protected public raiseevent readonly redim rem removehandler resume return sbyte
+    select set shadows shared short single static step stop string structure sub synclock
+    then throw to true try trycast typeof uinteger ulong ushort using variant wend when
+    while widening with withevents writeonly xor
+    """.split()
+)
+_CONSERVATIVE_CONTEXTUAL_NAMES = frozenset(
+    {
+        "file",
+        "from",
+        "group",
+        "orderby",
+        "partial",
+        "record",
+        "required",
+        "select",
+        "status",
+        "timestamp",
+        "type",
+        "value",
+        "where",
+    }
+)
+_RESERVED_PHYSICAL_NAMES = (
+    _SQL_RESERVED_NAMES
+    | _CSHARP_RESERVED_NAMES
+    | _VISUAL_BASIC_RESERVED_NAMES
+    | _CONSERVATIVE_CONTEXTUAL_NAMES
+)
 _SYSTEM_FIELDS = {"createdby", "createtime", "id", "updatedby", "updatetime"}
 _SECRET_ASSET_TYPES = {"credential", "secret"}
 _CONTRACT_MODELS: dict[str, type[BaseModel]] = {
@@ -54,6 +101,12 @@ _CONTRACT_MODELS: dict[str, type[BaseModel]] = {
     "PolicyDecision": PolicyDecision,
     "PolicyConfig": PolicyConfig,
 }
+
+
+def is_data_fabric_reserved_name(name: str) -> bool:
+    """Use a conservative SQL/C#/VB plus Data Fabric reserved-name check."""
+    lowered = name.lower()
+    return lowered in _RESERVED_PHYSICAL_NAMES or lowered in _SYSTEM_FIELDS
 
 
 class ManifestValidationError(ValueError):
@@ -211,6 +264,10 @@ def _validate_contract_alignment(manifest: PlatformManifest) -> None:
             raise ManifestValidationError(
                 f"invalid Data Fabric entity name: {entity.physical_name!r}"
             )
+        if is_data_fabric_reserved_name(entity.physical_name):
+            raise ManifestValidationError(
+                f"reserved Data Fabric entity name: {entity.physical_name!r}"
+            )
         expected_fields = set(_CONTRACT_MODELS[entity.contract].model_fields)
         actual_fields = {field.logical_name for field in entity.fields}
         if len(actual_fields) != len(entity.fields) or actual_fields != expected_fields:
@@ -227,8 +284,7 @@ def _validate_contract_alignment(manifest: PlatformManifest) -> None:
                 raise ManifestValidationError(
                     f"invalid Data Fabric field name: {field.physical_name!r}"
                 )
-            lowered = field.physical_name.lower()
-            if lowered in _RESERVED_PHYSICAL_NAMES or lowered in _SYSTEM_FIELDS:
+            if is_data_fabric_reserved_name(field.physical_name):
                 raise ManifestValidationError(
                     f"reserved Data Fabric field name: {field.physical_name!r}"
                 )

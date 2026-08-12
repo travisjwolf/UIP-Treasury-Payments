@@ -15,6 +15,7 @@ from src.contracts import (
 from src.platform.manifest import (
     DEFAULT_MANIFEST_PATH,
     ManifestValidationError,
+    is_data_fabric_reserved_name,
     load_manifest,
 )
 
@@ -91,6 +92,28 @@ def test_reserved_contract_names_have_explicit_approved_physical_mappings() -> N
     )
 
 
+def test_every_logical_name_in_the_conservative_reserved_set_is_mapped() -> None:
+    manifest = load_manifest()
+    collisions = {
+        f"{entity.contract}.{field.logical_name}"
+        for entity in manifest.entities
+        for field in entity.fields
+        if is_data_fabric_reserved_name(field.logical_name)
+    }
+
+    assert collisions == set(EXPECTED_MAPPINGS)
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["select", "timestamp", "public", "boolean", "function", "value", "while"],
+)
+def test_conservative_reserved_set_covers_sql_csharp_and_visual_basic(
+    name: str,
+) -> None:
+    assert is_data_fabric_reserved_name(name)
+
+
 def test_gate_settings_seed_every_fixture_customer_with_all_configurable_gates() -> None:
     manifest = load_manifest()
 
@@ -117,6 +140,13 @@ def test_orchestrator_resources_are_complete_and_non_secret() -> None:
     )
     assert manifest.security.allow_secret_assets is False
     assert manifest.security.agent_write_credentials is False
+
+
+def test_bounded_agent_assets_match_the_merged_bravo_runtime_defaults() -> None:
+    assets = {asset.name: asset.value for asset in load_manifest().orchestrator.assets}
+
+    assert assets["AgentMaxIterations"] == 3
+    assert assets["AgentTokenBudget"] == 1_200
 
 
 def test_checked_in_manifest_is_tenant_neutral_and_contains_no_secret_markers() -> None:
