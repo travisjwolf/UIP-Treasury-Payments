@@ -1,3 +1,8 @@
+from .callback import (
+    CallbackTranscriptAnalyzer,
+    CallbackTranscriptError,
+    parse_callback_transcript,
+)
 from .repair import AgentLimits, analyze_fixture
 from .tooling import (
     CsvRepairTools,
@@ -10,6 +15,8 @@ from .tooling import (
 
 __all__ = [
     "AgentLimits",
+    "CallbackTranscriptAnalyzer",
+    "CallbackTranscriptError",
     "CsvRepairTools",
     "EvidenceRecord",
     "EvidenceType",
@@ -17,4 +24,5 @@ __all__ = [
     "StubRepairTools",
     "ToolResult",
     "analyze_fixture",
+    "parse_callback_transcript",
 ]

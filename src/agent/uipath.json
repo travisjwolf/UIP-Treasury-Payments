@@ -6,7 +6,8 @@
   },
   "packOptions": {
     "fileExtensionsIncluded": [
-      ".csv"
+      ".csv",
+      ".txt"
     ],
     "filesIncluded": [],
     "filesExcluded": [

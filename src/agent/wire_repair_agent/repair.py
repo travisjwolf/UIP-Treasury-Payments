@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Mapping
 
+from .callback import CallbackTranscriptAnalyzer
 from .tooling import EvidenceRecord, EvidenceType, RepairTools, ToolResult
 
 
@@ -14,6 +15,7 @@ _EXPECTED_EVIDENCE_TYPES: dict[str, EvidenceType] = {
     "account_lookup": "lookup",
     "counterparty_history": "history_match",
     "documents": "document",
+    "callback_transcript": "call_transcript",
 }
 
 
@@ -36,6 +38,30 @@ async def analyze_fixture(
     case = SimpleNamespace(**payment)
     trace: list[ToolResult] = []
     tools_called: list[str] = []
+    if case.exception_code == "EX-04":
+        callback = CallbackTranscriptAnalyzer().analyze(case)
+        invariant_error = _tool_result_invariant_error(
+            callback,
+            case=case,
+            expected_tool_name="callback_transcript",
+        )
+        if invariant_error is not None:
+            raise ValueError(
+                "callback transcript failed the traceability contract: "
+                + invariant_error
+            )
+        return _output(
+            outcome="NEEDS_INFO",
+            proposed_action=None,
+            confidence=0.74,
+            reasoning_summary=(
+                "The partial account confirmation conflicts with the payment "
+                "record, so a human must complete verification before any "
+                "repair can proceed."
+            ),
+            trace=[callback],
+            tools_called=["callback_transcript"],
+        )
     iterations_allowed_by_budget = (
         limits.token_budget // limits.estimated_tokens_per_iteration
     )
@@ -318,6 +344,16 @@ def _tool_subject_invariant_error(
             and data.get("beneficiary_name") != case.beneficiary_name
         ):
             return "history beneficiary subject does not match the payment case"
+
+    if expected_tool_name == "callback_transcript":
+        transcript = data.get("transcript")
+        if not isinstance(transcript, Mapping):
+            return "callback payload does not identify its transcript"
+        if transcript.get("case_id") != case.case_id:
+            return "callback transcript subject does not match the payment case"
+        flagged_fields = data.get("flagged_fields")
+        if flagged_fields != ["beneficiary_account"]:
+            return "callback transcript does not isolate the account conflict"
 
     return None
 

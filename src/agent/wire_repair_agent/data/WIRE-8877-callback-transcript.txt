@@ -1,0 +1,10 @@
+format_version: CALLBACK_TRANSCRIPT_V1
+case_id: WIRE-8877
+recorded_at: 2026-08-07T09:05:00Z
+customer_name: Northgate Property Partners
+beneficiary_name: ATLAS TITLE & ESCROW
+remittance_reference: NG-2291
+beneficiary_account_last_four: 2299
+full_replacement_account_provided: false
+full_replacement_account_authorized: false
+transcript_text: Synthetic prerecorded callback: Northgate Property Partners confirms beneficiary ATLAS TITLE & ESCROW and closing reference NG-2291. The caller confirms only that the beneficiary account ends in 2299 and does not provide or authorize a full replacement account.
