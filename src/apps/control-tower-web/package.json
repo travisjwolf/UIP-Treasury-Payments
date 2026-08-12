@@ -1,7 +1,9 @@
 {
   "name": "control-tower-web",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "verify:model": "node --input-type=module -e \"import {paginate} from './app/model.mjs'; const p=paginate(Array.from({length:40}),2,25); if(p.items.length!==15) process.exit(1)\""
   }
 }

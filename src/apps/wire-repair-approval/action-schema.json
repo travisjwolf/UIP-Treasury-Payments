@@ -1,0 +1,62 @@
+{
+  "inputs": {
+    "type": "object",
+    "properties": {
+      "payment": {
+        "type": "object",
+        "required": true,
+        "description": "Complete PaymentCase record for the repair under review."
+      },
+      "gate": {
+        "type": "string",
+        "required": true,
+        "description": "First deterministic policy gate that fired."
+      },
+      "reason": {
+        "type": "string",
+        "required": true,
+        "description": "Plain-language deterministic gate reason."
+      },
+      "evidence": {
+        "type": "array",
+        "required": true,
+        "description": "Read-only evidence packet supporting the proposal.",
+        "items": { "type": "object" }
+      },
+      "cutoff_time": {
+        "type": "string",
+        "required": true,
+        "description": "Applicable payment rail cutoff in HH:MM format."
+      },
+      "permitted_actions": {
+        "type": "array",
+        "required": true,
+        "description": "Actions the policy path permits for this task.",
+        "items": { "type": "string" }
+      }
+    }
+  },
+  "outputs": {
+    "type": "object",
+    "properties": {}
+  },
+  "inOuts": {
+    "type": "object",
+    "properties": {
+      "proposal": {
+        "type": "object",
+        "required": true,
+        "description": "Evidence-backed proposed field repair, pre-filled and editable by the reviewer."
+      }
+    }
+  },
+  "outcomes": {
+    "type": "object",
+    "properties": {
+      "Approve": { "type": "string" },
+      "Edit": { "type": "string" },
+      "Reject": { "type": "string" },
+      "Escalate": { "type": "string" }
+    }
+  }
+}
