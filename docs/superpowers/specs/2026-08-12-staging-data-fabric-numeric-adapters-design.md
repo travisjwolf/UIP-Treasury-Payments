@@ -2,7 +2,7 @@
 
 Date: 2026-08-12
 Owner: Alpha integration stewardship
-Status: Design approved; implementation pending written-spec review
+Status: Approved for implementation on 2026-08-12
 
 ## Context
 
