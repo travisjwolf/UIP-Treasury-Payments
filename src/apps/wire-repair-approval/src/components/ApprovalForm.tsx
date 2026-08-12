@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Theme } from "@uipath/coded-action-app";
+import {
+  completeTaskWithState,
+  isOutcomeSubmittable,
+  type Outcome,
+  type Proposal,
+  type Scalar,
+} from "../approvalLogic";
 import { codedActionAppService } from "../uipath";
 
-type Scalar = string | number | boolean | null;
 type PaymentCase = Record<string, Scalar> & {
   case_id: string;
   amount_usd: number;
@@ -12,7 +18,6 @@ type PaymentCase = Record<string, Scalar> & {
   beneficiary_account: string;
   exception_code: string;
 };
-type Proposal = { field: string; current_value: Scalar; proposed_value: Scalar };
 type Evidence = { type: string; source: string; content: unknown; produced_by?: string; timestamp?: string };
 type TaskData = {
   payment: PaymentCase;
@@ -23,7 +28,6 @@ type TaskData = {
   cutoff_time: string;
   permitted_actions: string[];
 };
-type Outcome = "Approve" | "Edit" | "Reject" | "Escalate";
 
 const emptyData: TaskData = {
   payment: { case_id: "", amount_usd: 0, currency: "USD", customer_name: "", beneficiary_name: "", beneficiary_account: "", exception_code: "" },
@@ -60,14 +64,13 @@ export default function ApprovalForm({ onInitTheme }: { onInitTheme: (dark: bool
     codedActionAppService.setTaskData(updated);
   };
   const submit = async (action: Outcome) => {
-    setSubmitting(action);
-    setError("");
-    try {
-      await codedActionAppService.completeTask(action, taskData);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Task completion failed.");
-      setSubmitting(null);
-    }
+    await completeTaskWithState({
+      action,
+      taskData,
+      completeTask: (outcome, data) => codedActionAppService.completeTask(outcome, data),
+      setSubmitting,
+      setError,
+    });
   };
   const money = new Intl.NumberFormat("en-US", { style: "currency", currency: taskData.payment.currency || "USD" }).format(taskData.payment.amount_usd);
 
@@ -94,7 +97,7 @@ export default function ApprovalForm({ onInitTheme }: { onInitTheme: (dark: bool
 
       {error && <p className="error" role="alert">{error}</p>}
       <footer className="actions">
-        {(["Approve", "Edit", "Reject", "Escalate"] as Outcome[]).filter((outcome) => allowed.has(normalizedAction(outcome))).map((outcome) => <button key={outcome} type="button" className={outcome === "Approve" ? "primary" : "secondary"} disabled={isReadOnly || submitting !== null} onClick={() => submit(outcome)}>{submitting === outcome ? "Recording…" : outcome}</button>)}
+        {(["Approve", "Edit", "Reject", "Escalate"] as Outcome[]).filter((outcome) => allowed.has(normalizedAction(outcome))).map((outcome) => <button key={outcome} type="button" className={outcome === "Approve" ? "primary" : "secondary"} disabled={isReadOnly || submitting !== null || !isOutcomeSubmittable(outcome, taskData.proposal)} onClick={() => submit(outcome)}>{submitting === outcome ? "Recording…" : outcome}</button>)}
       </footer>
       <p className="boundary">The repair agent cannot write. Approval authorizes the separately credentialed effector and preserves the audit trail.</p>
     </article>

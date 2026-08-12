@@ -83,6 +83,15 @@ def test_coded_action_app_schema_preserves_c1_escalation_contract_exactly():
 
 
 def test_coded_action_app_is_a_standalone_buildable_action_surface():
+    tested = subprocess.run(
+        ["npm.cmd", "test"],
+        cwd=ACTION_APP,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tested.returncode == 0, tested.stderr
+
     completed = subprocess.run(
         ["npm.cmd", "run", "build"],
         cwd=ACTION_APP,
@@ -104,7 +113,6 @@ def test_coded_action_app_is_a_standalone_buildable_action_surface():
     assert "@uipath/coded-action-app" in package["dependencies"]
     assert "@uipath/uipath-typescript" not in package["dependencies"]
     assert project == {"Name": "wire-repair-approval", "ProjectType": "AppV2"}
-    assert "completeTask(action, taskData)" in source
     assert "taskData.cutoff_time" in source
     assert "taskData.evidence" in source
     assert "taskData.permitted_actions" in source

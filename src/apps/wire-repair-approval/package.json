@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build"
+    "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "test": "node --test --experimental-strip-types test/approvalLogic.test.ts"
   },
   "dependencies": {
     "@uipath/coded-action-app": "1.0.0-beta.2",
