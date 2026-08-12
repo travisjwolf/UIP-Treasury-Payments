@@ -95,6 +95,22 @@ def test_flow_has_no_mock_or_caller_controlled_auto_apply_path():
     ]
     assert {item["name"] for item in agent_bindings} == {"name", "folderPath"}
     assert len(agent_bindings) == 2
+    assert next(
+        item for item in agent_bindings if item["name"] == "folderPath"
+    )["default"] == "TreasuryPayments"
+
+    # The definition is copied verbatim from `registry get --local`; only the
+    # deployable top-level resource binding carries the provisioned folder.
+    agent_definition = next(
+        item
+        for item in flow["definitions"]
+        if item["nodeType"]
+        == "uipath.core.agent.ee894252-e868-4de2-a8b2-2b29ba8efd07"
+    )
+    definition_bindings = agent_definition["model"]["bindings"]["values"]
+    assert next(
+        item for item in definition_bindings if item["name"] == "folderPath"
+    )["default"] == ""
 
 
 @pytest.mark.parametrize(

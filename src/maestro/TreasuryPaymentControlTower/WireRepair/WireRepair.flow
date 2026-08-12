@@ -1929,7 +1929,7 @@
       "resourceKey": "ee894252-e868-4de2-a8b2-2b29ba8efd07",
       "propertyAttribute": "folderPath",
       "resourceSubType": "Agent",
-      "default": ""
+      "default": "TreasuryPayments"
     }
   ],
   "variables": {
