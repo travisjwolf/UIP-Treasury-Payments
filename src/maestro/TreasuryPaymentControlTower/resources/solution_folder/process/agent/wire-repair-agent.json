@@ -1,0 +1,38 @@
+{
+  "docVersion": "1.0.0",
+  "resource": {
+    "name": "wire-repair-agent",
+    "kind": "process",
+    "type": "agent",
+    "apiVersion": "orchestrator.uipath.com/v1",
+    "projectKey": "f5126a0b-1836-4aa7-bd7b-0430dc7f5a08",
+    "isOverridable": true,
+    "dependencies": [
+      {
+        "kind": "package",
+        "name": "wire-repair-agent"
+      }
+    ],
+    "runtimeDependencies": [],
+    "folders": [
+      {
+        "fullyQualifiedName": "solution_folder"
+      }
+    ],
+    "spec": {
+      "type": "Agent",
+      "name": "wire-repair-agent",
+      "package": {
+        "key": "4ec2a7e2-d011-419d-9bec-59c45d0c8ccf"
+      },
+      "targetFrameworkValue": "Portable",
+      "retentionAction": "Delete",
+      "retentionPeriod": 30,
+      "staleRetentionAction": "Delete",
+      "staleRetentionPeriod": 180
+    },
+    "locks": [],
+    "key": "ee894252-e868-4de2-a8b2-2b29ba8efd07",
+    "files": []
+  }
+}
