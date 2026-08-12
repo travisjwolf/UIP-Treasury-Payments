@@ -120,15 +120,19 @@ class SandboxEffector:
             raise EffectorAuthorizationError(
                 "proposal current_value does not match the payment record"
             )
+        if any(item.case_id != case.case_id for item in evidence):
+            raise EffectorAuthorizationError(
+                "evidence case_id must match the payment record"
+            )
         if not _is_traceable(action.proposed_value, evidence):
             raise EffectorAuthorizationError(
                 "proposed value must be traceable to the supplied evidence"
             )
-        if authorization.mode == "auto_apply" and field_name in {
-            "beneficiary_account",
-            "amount_usd",
-            "currency",
-        }:
+        if field_name in {"amount_usd", "currency"}:
+            raise EffectorAuthorizationError(
+                f"{field_name} is a non-overridable policy hard stop"
+            )
+        if authorization.mode == "auto_apply" and field_name == "beneficiary_account":
             raise EffectorAuthorizationError(
                 f"{field_name} is not eligible for autonomous application"
             )

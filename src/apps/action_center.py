@@ -86,6 +86,14 @@ class ActionCenterService:
         if action == "edit":
             if edited_proposal is None:
                 raise ValueError("edit requires edited_proposal")
+            if payload.proposal is None:
+                raise ValueError("edit requires an original proposal")
+            original_field = getattr(payload.proposal.field, "value", payload.proposal.field)
+            edited_field = getattr(edited_proposal.field, "value", edited_proposal.field)
+            if edited_field != original_field:
+                raise ValueError(
+                    "edit must preserve the same field evaluated by policy"
+                )
             self.ledger.append(case_id, "HUMAN_EDITED", edited_proposal.field)
             effect = self.effector.apply(
                 payload.payment,

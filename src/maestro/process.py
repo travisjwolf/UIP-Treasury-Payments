@@ -164,10 +164,15 @@ class PaymentProcess:
             data={"gate": gate_value},
         )
         path = _policy_path(decision)
-        if path == "compliance_referral":
+        if path in {"compliance_referral", "policy_hard_stop"}:
+            terminal_state = (
+                "COMPLIANCE_REFERRAL_CREATED"
+                if path == "compliance_referral"
+                else "POLICY_HARD_STOP_RECORDED"
+            )
             self.ledger.append(
                 case.case_id,
-                "COMPLIANCE_REFERRAL_CREATED",
+                terminal_state,
                 decision.reason,
                 actor="payment-process",
                 data={"gate": gate_value, "overridable_in_app": False},
@@ -218,7 +223,7 @@ def _policy_path(decision: PolicyDecision) -> str:
         "COMPLIANCE_REFERRAL": "compliance_referral",
         "CALLBACK_THEN_HUMAN": "callback_then_human",
         "HUMAN_APPROVAL": "human_approval",
-        "HARD_STOP": "human_approval",
+        "HARD_STOP": "policy_hard_stop",
         "PRIORITY_ESCALATION": "human_approval",
         "ESCALATE": "human_approval",
     }[decision.result.value]

@@ -1,4 +1,5 @@
 import inspect
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
@@ -6,7 +7,8 @@ import sys
 import pytest
 
 from src.apps.action_center import ActionCenterService
-from src.contracts import AgentOutput, PaymentFixture, PolicyConfig
+from src.apps.control_tower import project_case
+from src.contracts import AgentOutput, PaymentFixture, PolicyConfig, ProposedAction
 from src.effectors import EffectorAuthorizationError, SandboxEffector
 from src.maestro import (
     AsyncFixtureRepairAgent,
@@ -234,6 +236,53 @@ async def test_sandbox_effector_rejects_unapproved_or_untraceable_effects():
 
 
 @pytest.mark.anyio
+async def test_human_edit_cannot_switch_the_deterministically_evaluated_field():
+    process, effector, ledger = _process()
+    blocked = await process.run_async(_fixture("WIRE-8841"))
+    assert blocked.escalation is not None
+    states_before = [entry.state for entry in ledger.for_case("WIRE-8841")]
+    cross_field_edit = ProposedAction(
+        field="amount_usd",
+        current_value=2_450_000.0,
+        proposed_value=31,
+    )
+
+    with pytest.raises(ValueError, match="same field"):
+        ActionCenterService(effector, ledger).handle(
+            blocked.escalation,
+            "edit",
+            edited_proposal=cross_field_edit,
+            reviewer_identity="ops://demo-reviewer",
+        )
+
+    assert effector.requests == []
+    assert [entry.state for entry in ledger.for_case("WIRE-8841")] == states_before
+
+
+@pytest.mark.anyio
+async def test_cross_case_evidence_cannot_authorize_an_effect():
+    process, effector, ledger = _process()
+    blocked = await process.run_async(_fixture("WIRE-8841"))
+    assert blocked.escalation is not None
+    foreign_payload = replace(
+        blocked.escalation,
+        evidence=tuple(
+            item.model_copy(update={"case_id": "WIRE-FOREIGN"})
+            for item in blocked.escalation.evidence
+        ),
+    )
+
+    with pytest.raises(EffectorAuthorizationError, match="evidence case_id"):
+        ActionCenterService(effector, ledger).handle(
+            foreign_payload,
+            "approve",
+            reviewer_identity="ops://demo-reviewer",
+        )
+
+    assert effector.requests == []
+
+
+@pytest.mark.anyio
 async def test_async_orchestration_keeps_sync_test_doubles_injectable():
     fixture = _fixture("WIRE-8802")
     expected = AgentOutput.model_validate(
@@ -281,10 +330,47 @@ async def test_g0_routes_to_compliance_without_an_overridable_action_task():
     assert result.decision.result.value == "COMPLIANCE_REFERRAL"
     assert result.escalation is None
     assert result.effector_result is None
+    assert project_case(result).status == "COMPLIANCE_REFERRAL_REQUIRED"
     assert effector.requests == []
     assert [entry.state for entry in ledger.for_case("WIRE-8917")][-2:] == [
         "AUTONOMY_REFUSED",
         "COMPLIANCE_REFERRAL_CREATED",
+    ]
+
+
+@pytest.mark.anyio
+async def test_g2_routes_to_non_overridable_policy_hard_stop():
+    fixture = _fixture("WIRE-8802")
+
+    class AmountChangingAgent:
+        def analyze(self, _case, _fixture):
+            return AgentOutput(
+                outcome="BLOCKED_POLICY",
+                proposed_action={
+                    "field": "amount_usd",
+                    "current_value": 84_500.0,
+                    "proposed_value": 84_501.0,
+                },
+                confidence=1.0,
+                evidence=[],
+                reasoning_summary="Synthetic forbidden amount change.",
+                tools_called=[],
+            )
+
+    process, effector, ledger = _process()
+    process.agent = AmountChangingAgent()
+
+    result = await process.run_async(fixture)
+
+    assert result.path == "policy_hard_stop"
+    assert result.decision.gate.value == "G2"
+    assert result.decision.result.value == "HARD_STOP"
+    assert result.escalation is None
+    assert result.effector_result is None
+    assert effector.requests == []
+    assert [entry.state for entry in ledger.for_case("WIRE-8802")][-2:] == [
+        "AUTONOMY_REFUSED",
+        "POLICY_HARD_STOP_RECORDED",
     ]
 
 
