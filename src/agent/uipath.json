@@ -5,7 +5,10 @@
     "isConversational": false
   },
   "packOptions": {
-    "fileExtensionsIncluded": [],
+    "fileExtensionsIncluded": [
+      ".csv",
+      ".txt"
+    ],
     "filesIncluded": [],
     "filesExcluded": [
       ".env",

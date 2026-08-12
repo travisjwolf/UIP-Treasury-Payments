@@ -6,7 +6,14 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Mapping
 
-from .tooling import EvidenceRecord, EvidenceType, RepairTools, ToolResult
+from .callback import CallbackTranscriptAnalyzer, CallbackTranscriptError
+from .tooling import (
+    EvidenceRecord,
+    EvidenceType,
+    RepairTools,
+    ToolResult,
+    normalize_beneficiary_name,
+)
 
 
 _EXPECTED_EVIDENCE_TYPES: dict[str, EvidenceType] = {
@@ -14,6 +21,7 @@ _EXPECTED_EVIDENCE_TYPES: dict[str, EvidenceType] = {
     "account_lookup": "lookup",
     "counterparty_history": "history_match",
     "documents": "document",
+    "callback_transcript": "call_transcript",
 }
 
 
@@ -36,6 +44,33 @@ async def analyze_fixture(
     case = SimpleNamespace(**payment)
     trace: list[ToolResult] = []
     tools_called: list[str] = []
+    if (
+        case.exception_code == "EX-04"
+        and CallbackTranscriptAnalyzer.is_mapped_case(case.case_id)
+    ):
+        try:
+            callback = CallbackTranscriptAnalyzer().analyze(case)
+        except CallbackTranscriptError:
+            return _callback_failure_output(case)
+        invariant_error = _tool_result_invariant_error(
+            callback,
+            case=case,
+            expected_tool_name="callback_transcript",
+        )
+        if invariant_error is not None:
+            return _callback_failure_output(case)
+        return _output(
+            outcome="NEEDS_INFO",
+            proposed_action=None,
+            confidence=0.74,
+            reasoning_summary=(
+                "The partial account confirmation conflicts with the payment "
+                "record, so a human must complete verification before any "
+                "repair can proceed."
+            ),
+            trace=[callback],
+            tools_called=["callback_transcript"],
+        )
     iterations_allowed_by_budget = (
         limits.token_budget // limits.estimated_tokens_per_iteration
     )
@@ -151,6 +186,27 @@ async def analyze_fixture(
         ),
         trace=trace,
         tools_called=tools_called,
+    )
+
+
+def _callback_failure_output(case: Any) -> dict[str, Any]:
+    failure = _runtime_failure_result(
+        case_id=case.case_id,
+        tool_name="callback_transcript",
+        attempt=1,
+        error_type="CallbackTranscriptError",
+        timestamp=_runtime_trace_timestamp(case, []),
+    )
+    return _output(
+        outcome="EXHAUSTED",
+        proposed_action=None,
+        confidence=0.0,
+        reasoning_summary=(
+            "Callback transcript analysis failed closed; a human must review "
+            "the case using the sanitized failure trace."
+        ),
+        trace=[failure],
+        tools_called=["callback_transcript"],
     )
 
 
@@ -315,9 +371,23 @@ def _tool_subject_invariant_error(
         if (
             case.exception_code == "EX-01"
             and data.get("beneficiary_account") is not None
-            and data.get("beneficiary_name") != case.beneficiary_name
+            and (
+                not isinstance(data.get("beneficiary_name"), str)
+                or normalize_beneficiary_name(data["beneficiary_name"])
+                != normalize_beneficiary_name(case.beneficiary_name)
+            )
         ):
             return "history beneficiary subject does not match the payment case"
+
+    if expected_tool_name == "callback_transcript":
+        transcript = data.get("transcript")
+        if not isinstance(transcript, Mapping):
+            return "callback payload does not identify its transcript"
+        if transcript.get("case_id") != case.case_id:
+            return "callback transcript subject does not match the payment case"
+        flagged_fields = data.get("flagged_fields")
+        if flagged_fields != ["beneficiary_account"]:
+            return "callback transcript does not isolate the account conflict"
 
     return None
 

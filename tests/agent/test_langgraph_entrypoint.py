@@ -53,6 +53,49 @@ async def test_langgraph_entrypoint_emits_the_complete_agent_contract():
     ]
 
 
+@pytest.mark.anyio
+async def test_langgraph_entrypoint_uses_real_csv_history_by_default():
+    module = load_graph_module()
+
+    raw_output = await module.graph.ainvoke(load_fixture("WIRE-8802"))
+    output = AgentOutput.from_dict(raw_output)
+
+    assert output.proposed_action is not None
+    assert output.proposed_action.proposed_value == "PACIFIC STEEL & SUPPLY"
+    selected_history = next(
+        item
+        for item in output.evidence
+        if item.produced_by == "counterparty_history"
+    )
+    assert selected_history.source == "fixture://counterparty_history.csv#row=18"
+    assert (
+        json.loads(selected_history.content)["beneficiary_name"]
+        == output.proposed_action.proposed_value
+    )
+
+
+@pytest.mark.anyio
+async def test_langgraph_entrypoint_accepts_unique_normalized_ex01_name_match():
+    module = load_graph_module()
+    fixture = load_fixture("WIRE-8841")
+    fixture["payment_case"]["beneficiary_name"] = "Pacific Steel and Supply."
+
+    output = AgentOutput.from_dict(await module.graph.ainvoke(fixture))
+
+    assert output.outcome == "BLOCKED_POLICY"
+    assert output.proposed_action is not None
+    assert output.proposed_action.field == "beneficiary_account"
+    assert output.proposed_action.current_value == "882300441"
+    assert output.proposed_action.proposed_value == "8823004417"
+    assert output.confidence == 0.91
+    selected_history = next(
+        item
+        for item in output.evidence
+        if item.produced_by == "counterparty_history"
+    )
+    assert selected_history.source == "fixture://counterparty_history.csv#row=18"
+
+
 def test_public_schema_is_typed_described_and_does_not_expose_fixture_answers():
     module = load_graph_module()
 
