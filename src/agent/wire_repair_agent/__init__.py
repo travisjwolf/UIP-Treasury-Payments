@@ -1,5 +1,6 @@
 from .repair import AgentLimits, analyze_fixture
 from .tooling import (
+    CsvRepairTools,
     EvidenceRecord,
     EvidenceType,
     RepairTools,
@@ -9,6 +10,7 @@ from .tooling import (
 
 __all__ = [
     "AgentLimits",
+    "CsvRepairTools",
     "EvidenceRecord",
     "EvidenceType",
     "RepairTools",

@@ -15,7 +15,7 @@ from pydantic import (
     model_validator,
 )
 
-from wire_repair_agent import EvidenceType, StubRepairTools, analyze_fixture
+from wire_repair_agent import CsvRepairTools, EvidenceType, analyze_fixture
 
 
 AgentOutcome = Literal[
@@ -268,7 +268,7 @@ async def investigate_and_propose(state: State) -> dict[str, Any]:
         "gate_context": state.gate_context.model_dump(mode="json"),
         "demo_role": state.demo_role,
     }
-    return await analyze_fixture(fixture, StubRepairTools())
+    return await analyze_fixture(fixture, CsvRepairTools())
 
 
 builder = StateGraph(

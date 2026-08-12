@@ -9,6 +9,7 @@ from src.agent.wire_repair_agent.tooling import (
     StubRepairTools,
     ToolResult,
 )
+from src.agent.wire_repair_agent import tooling
 from src.contracts import (
     AgentOutput,
     GateId,
@@ -607,3 +608,65 @@ async def test_initial_transient_failure_trace_has_monotonic_timestamps():
     assert output.tools_called[:3] == ["sanctions", "sanctions", "sanctions"]
     timestamps = [item.timestamp for item in output.evidence]
     assert timestamps == sorted(timestamps)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    (
+        "case_id",
+        "expected_outcome",
+        "field",
+        "current_value",
+        "proposed_value",
+        "confidence",
+    ),
+    [
+        (
+            "WIRE-8802",
+            "RESOLVED",
+            "beneficiary_name",
+            "PACIFIC STEEL & SUPPY",
+            "PACIFIC STEEL & SUPPLY",
+            0.94,
+        ),
+        (
+            "WIRE-8841",
+            "BLOCKED_POLICY",
+            "beneficiary_account",
+            "882300441",
+            "8823004417",
+            0.91,
+        ),
+    ],
+)
+async def test_csv_tools_produce_both_primary_hero_proposals_from_selected_history(
+    case_id: str,
+    expected_outcome: str,
+    field: str,
+    current_value: str,
+    proposed_value: str,
+    confidence: float,
+):
+    implementation = getattr(tooling, "CsvRepairTools", None)
+    assert implementation is not None, "CsvRepairTools is not implemented"
+
+    output = AgentOutput.from_dict(
+        await analyze_fixture(load_fixture(case_id), implementation())
+    )
+
+    assert output.outcome == expected_outcome
+    assert output.proposed_action is not None
+    assert output.proposed_action.field == field
+    assert output.proposed_action.current_value == current_value
+    assert output.proposed_action.proposed_value == proposed_value
+    assert output.confidence == confidence
+    selected_history = [
+        item
+        for item in output.evidence
+        if item.produced_by == "counterparty_history"
+    ]
+    assert len(selected_history) == 1
+    assert selected_history[0].source == (
+        "fixture://counterparty_history.csv#row=18"
+    )
+    assert proposed_value in json.loads(selected_history[0].content).values()

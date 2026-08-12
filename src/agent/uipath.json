@@ -5,7 +5,9 @@
     "isConversational": false
   },
   "packOptions": {
-    "fileExtensionsIncluded": [],
+    "fileExtensionsIncluded": [
+      "csv"
+    ],
     "filesIncluded": [],
     "filesExcluded": [
       ".env",

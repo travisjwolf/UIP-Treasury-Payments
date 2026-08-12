@@ -8,6 +8,7 @@ from jsonschema import Draft202012Validator
 
 from pydantic import ValidationError
 
+from src.agent.wire_repair_agent.tooling import StubRepairTools
 from src.contracts import AgentOutput, GateContext, PaymentCase
 
 
@@ -51,6 +52,22 @@ async def test_langgraph_entrypoint_emits_the_complete_agent_contract():
         "account_lookup",
         "counterparty_history",
     ]
+
+
+@pytest.mark.anyio
+async def test_langgraph_entrypoint_constructs_csv_tools_by_default(monkeypatch):
+    module = load_graph_module()
+    constructions = []
+
+    def recording_csv_tools():
+        constructions.append(True)
+        return StubRepairTools()
+
+    monkeypatch.setattr(module, "CsvRepairTools", recording_csv_tools, raising=False)
+
+    await module.graph.ainvoke(load_fixture("WIRE-8802"))
+
+    assert constructions == [True]
 
 
 def test_public_schema_is_typed_described_and_does_not_expose_fixture_answers():
