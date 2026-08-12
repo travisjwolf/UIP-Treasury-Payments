@@ -1,0 +1,23 @@
+{
+  "docVersion": "1.0.0",
+  "resource": {
+    "name": "wire-repair-agent",
+    "kind": "package",
+    "apiVersion": "orchestrator.uipath.com/v1",
+    "projectKey": "f5126a0b-1836-4aa7-bd7b-0430dc7f5a08",
+    "isOverridable": true,
+    "dependencies": [],
+    "runtimeDependencies": [],
+    "folders": [
+      {
+        "fullyQualifiedName": "solution_folder"
+      }
+    ],
+    "spec": {
+      "name": "wire-repair-agent"
+    },
+    "locks": [],
+    "key": "4ec2a7e2-d011-419d-9bec-59c45d0c8ccf",
+    "files": []
+  }
+}
