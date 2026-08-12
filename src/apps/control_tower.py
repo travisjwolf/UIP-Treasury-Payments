@@ -37,6 +37,8 @@ def _status(result: ProcessResult) -> str:
         "auto_apply": "AUTO_APPLY_PENDING",
         "human_approval": "HUMAN_APPROVAL_REQUIRED",
         "callback_then_human": "CALLBACK_REQUIRED",
+        "compliance_referral": "COMPLIANCE_REFERRAL_REQUIRED",
+        "policy_hard_stop": "POLICY_HARD_STOP",
     }[result.path]
 
 

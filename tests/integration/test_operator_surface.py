@@ -34,7 +34,7 @@ def test_control_tower_projection_exposes_queue_and_case_detail_fields():
     assert detail.confidence == 0.91
     assert detail.gate == "G1"
     assert detail.evidence_count == 1
-    assert detail.proposed_value == "4628492309"
+    assert detail.proposed_value == "8823004417"
 
 
 def test_escalation_payload_serializes_the_full_human_review_packet():
@@ -45,7 +45,7 @@ def test_escalation_payload_serializes_the_full_human_review_packet():
 
     assert serialized["payment"]["case_id"] == "WIRE-8841"
     assert serialized["gate"] == "G1"
-    assert serialized["proposal"]["proposed_value"] == "4628492309"
+    assert serialized["proposal"]["proposed_value"] == "8823004417"
     assert serialized["evidence"][0]["source"] == "test-fixture"
     assert serialized["permitted_actions"] == ["approve", "edit", "reject", "escalate"]
 
@@ -57,9 +57,9 @@ def test_approve_routes_only_the_human_approved_value_to_the_effector():
 
     result = ActionCenterService(effector, ledger).handle(payload, "approve")
 
-    assert result.status == "EFFECT_REQUESTED"
-    assert effector.requests[0].action.proposed_value == "4628492309"
-    assert ledger.entries[-1].state == "EFFECT_REQUESTED"
+    assert result.status == "EFFECT_RECORDED"
+    assert effector.requests[0].action.proposed_value == "8823004417"
+    assert ledger.entries[-1].state == "CASE_STATE_UPDATED"
 
 
 def test_reject_never_calls_the_effector():
@@ -87,11 +87,11 @@ def test_edit_requires_a_replacement_proposal_and_routes_that_value():
     payload = _result("WIRE-8841").escalation
     effector = StubEffector()
     ledger = InMemoryLedger()
-    edited = ProposedAction("beneficiary_account", "882300441", "4628492309")
+    edited = ProposedAction("beneficiary_account", "882300441", "8823004417")
 
     result = ActionCenterService(effector, ledger).handle(payload, "edit", edited)
 
-    assert result.status == "EFFECT_REQUESTED"
+    assert result.status == "EFFECT_RECORDED"
     assert effector.requests[0].action == edited
 
 
