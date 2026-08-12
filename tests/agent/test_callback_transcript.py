@@ -383,6 +383,27 @@ async def test_mapped_callback_asset_failures_return_sanitized_closed_output(
 
 
 @pytest.mark.anyio
+async def test_undecodable_callback_asset_returns_sanitized_closed_output(
+    monkeypatch,
+    tmp_path: Path,
+):
+    analyzer_type, _, _ = callback_api()
+    asset_path = tmp_path / "undecodable-callback.txt"
+    asset_path.write_bytes(b"\xff\xfe\xfa")
+    monkeypatch.setattr(
+        analyzer_type,
+        "_ASSETS",
+        {"WIRE-8877": (asset_path, CALLBACK_SOURCE)},
+    )
+
+    raw_output = await analyze_fixture(
+        load_fixture("WIRE-8877"), tooling.CsvRepairTools()
+    )
+
+    assert_sanitized_callback_failure(raw_output)
+
+
+@pytest.mark.anyio
 async def test_mapped_callback_invariant_failure_returns_sanitized_closed_output(
     monkeypatch,
 ):
@@ -433,6 +454,26 @@ async def test_real_langgraph_entrypoint_closes_mapped_callback_asset_failures(
             ),
             encoding="utf-8",
         )
+    monkeypatch.setattr(
+        analyzer_type,
+        "_ASSETS",
+        {"WIRE-8877": (asset_path, CALLBACK_SOURCE)},
+    )
+
+    raw_output = await module.graph.ainvoke(load_fixture("WIRE-8877"))
+
+    assert_sanitized_callback_failure(raw_output)
+
+
+@pytest.mark.anyio
+async def test_real_langgraph_entrypoint_closes_undecodable_callback_asset(
+    monkeypatch,
+    tmp_path: Path,
+):
+    module = load_graph_module()
+    analyzer_type = module.analyze_fixture.__globals__["CallbackTranscriptAnalyzer"]
+    asset_path = tmp_path / "undecodable-graph-callback.txt"
+    asset_path.write_bytes(b"\xff\xfe\xfa")
     monkeypatch.setattr(
         analyzer_type,
         "_ASSETS",

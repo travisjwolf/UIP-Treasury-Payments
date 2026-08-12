@@ -7,7 +7,13 @@ from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Mapping
 
 from .callback import CallbackTranscriptAnalyzer, CallbackTranscriptError
-from .tooling import EvidenceRecord, EvidenceType, RepairTools, ToolResult
+from .tooling import (
+    EvidenceRecord,
+    EvidenceType,
+    RepairTools,
+    ToolResult,
+    normalize_beneficiary_name,
+)
 
 
 _EXPECTED_EVIDENCE_TYPES: dict[str, EvidenceType] = {
@@ -365,7 +371,11 @@ def _tool_subject_invariant_error(
         if (
             case.exception_code == "EX-01"
             and data.get("beneficiary_account") is not None
-            and data.get("beneficiary_name") != case.beneficiary_name
+            and (
+                not isinstance(data.get("beneficiary_name"), str)
+                or normalize_beneficiary_name(data["beneficiary_name"])
+                != normalize_beneficiary_name(case.beneficiary_name)
+            )
         ):
             return "history beneficiary subject does not match the payment case"
 

@@ -52,6 +52,12 @@ class RepairTools(Protocol):
     async def documents(self, case: PaymentCaseLike) -> ToolResult: ...
 
 
+def normalize_beneficiary_name(value: str) -> str:
+    """Return the canonical beneficiary-name key used for matching."""
+    with_and = value.casefold().replace("&", " and ")
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", with_and).split())
+
+
 class StubRepairTools:
     _TIMESTAMP = "2026-08-07T09:00:00Z"
 
@@ -182,11 +188,6 @@ class CsvRepairTools:
             return cls._REPOSITORY_HISTORY_PATH
         return cls._PACKAGE_HISTORY_PATH
 
-    @staticmethod
-    def _normalized_name(value: str) -> str:
-        with_and = value.casefold().replace("&", " and ")
-        return " ".join(re.sub(r"[^a-z0-9]+", " ", with_and).split())
-
     def _rows(self) -> list[dict[str, str | int]]:
         with self.history_path.open(
             "r", encoding="utf-8-sig", newline=""
@@ -286,12 +287,12 @@ class CsvRepairTools:
     async def counterparty_history(self, case: PaymentCaseLike) -> ToolResult:
         rows = self._rows()
         if getattr(case, "exception_code", None) == "EX-01":
-            normalized_name = self._normalized_name(case.beneficiary_name)
+            normalized_name = normalize_beneficiary_name(case.beneficiary_name)
             matches = [
                 row
                 for row in rows
                 if row["customer_id"] == case.customer_id
-                and self._normalized_name(str(row["beneficiary_name"]))
+                and normalize_beneficiary_name(str(row["beneficiary_name"]))
                 == normalized_name
                 and str(row["beneficiary_account"]).startswith(
                     case.beneficiary_account

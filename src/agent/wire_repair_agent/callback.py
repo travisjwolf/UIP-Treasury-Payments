@@ -146,7 +146,7 @@ class CallbackTranscriptAnalyzer:
             parsed = parse_callback_transcript(
                 asset_path.read_text(encoding="utf-8")
             )
-        except OSError as error:
+        except (OSError, UnicodeError) as error:
             raise CallbackTranscriptError(
                 f"mapped callback transcript is unavailable for case {case.case_id}"
             ) from error
