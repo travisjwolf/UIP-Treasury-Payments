@@ -205,7 +205,7 @@ def test_deploy_copy_is_byte_identical_and_csv_is_packaged():
     config = json.loads(
         (ROOT / "src" / "agent" / "uipath.json").read_text(encoding="utf-8")
     )
-    assert "csv" in config["packOptions"]["fileExtensionsIncluded"]
+    assert ".csv" in config["packOptions"]["fileExtensionsIncluded"]
 
 
 def test_csv_toolset_preserves_the_four_method_async_read_only_protocol():
