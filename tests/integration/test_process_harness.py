@@ -5,8 +5,16 @@ import sys
 
 from src.apps.action_center import EscalationPayload
 from src.contracts.fixture_io import load_case_files
-from src.contracts.models import AgentOutput, Evidence, PaymentCase, PolicyDecision, ProposedAction
+from src.contracts.models import (
+    AgentOutput,
+    Evidence,
+    PaymentCase,
+    PolicyConfig,
+    PolicyDecision,
+    ProposedAction,
+)
 from src.effectors.stub import StubEffector
+from src.maestro.adapters import StaticPolicyConfigProvider
 from src.maestro.ledger import InMemoryLedger
 from src.maestro.process import PaymentProcess
 
@@ -22,7 +30,7 @@ FLOW_PATH = (
 )
 
 
-def _evidence(case_id: str, content: str) -> list[Evidence]:
+def _evidence(case_id: str, content: dict) -> list[Evidence]:
     return [
         Evidence(
             case_id=case_id,
@@ -46,7 +54,12 @@ class DemoAgent:
                     proposed_value="PACIFIC STEEL & SUPPLY",
                 ),
                 confidence=0.96,
-                evidence=tuple(_evidence(case.case_id, "known counterparty name")),
+                evidence=tuple(
+                    _evidence(
+                        case.case_id,
+                        {"beneficiary_name": "PACIFIC STEEL & SUPPLY"},
+                    )
+                ),
                 reasoning_summary="Matched the known counterparty history.",
                 tools_called=("counterparty_history",),
             )
@@ -56,10 +69,15 @@ class DemoAgent:
                 proposed_action=ProposedAction(
                     field="beneficiary_account",
                     current_value=case.beneficiary_account,
-                    proposed_value="4628492309",
+                    proposed_value="8823004417",
                 ),
                 confidence=0.91,
-                evidence=tuple(_evidence(case.case_id, "prior account lookup")),
+                evidence=tuple(
+                    _evidence(
+                        case.case_id,
+                        {"beneficiary_account": "8823004417"},
+                    )
+                ),
                 reasoning_summary="Found a prior account for the counterparty.",
                 tools_called=("account_lookup",),
             )
@@ -67,25 +85,50 @@ class DemoAgent:
             outcome="NEEDS_INFO",
             proposed_action=None,
             confidence=0.74,
-            evidence=tuple(_evidence(case.case_id, "callback required")),
+            evidence=tuple(_evidence(case.case_id, {"callback": "required"})),
             reasoning_summary="Customer confirmation is required.",
             tools_called=("callback_transcript",),
         )
 
 
 class DemoGate:
-    def evaluate(self, case: PaymentCase, agent_output: AgentOutput) -> PolicyDecision:
+    def evaluate(
+        self,
+        case: PaymentCase,
+        agent_output: AgentOutput,
+        _gate_context,
+        _policy_config,
+    ) -> PolicyDecision:
         if case.case_id == "WIRE-8802":
             return PolicyDecision(case.case_id, "NONE", "AUTO_APPLY", "All gates clear.", "2026-08-07T09:00:01Z")
         if case.case_id == "WIRE-8841":
             return PolicyDecision(case.case_id, "G1", "HUMAN_APPROVAL", "Beneficiary account change.", "2026-08-07T09:00:01Z")
-        return PolicyDecision(case.case_id, "G9", "ESCALATE", "Callback information is required.", "2026-08-07T09:00:01Z")
+        return PolicyDecision(case.case_id, "G9", "CALLBACK_THEN_HUMAN", "Callback information is required.", "2026-08-07T09:00:01Z")
 
 
 def _process() -> tuple[PaymentProcess, StubEffector, InMemoryLedger]:
     effector = StubEffector()
     ledger = InMemoryLedger()
-    return PaymentProcess(DemoAgent(), DemoGate(), effector, ledger), effector, ledger
+    provider = StaticPolicyConfigProvider(
+        {
+            customer_id: PolicyConfig(
+                customer_id=customer_id,
+                same_day_beneficiary_velocity_threshold_usd=5_000_000.0,
+            )
+            for customer_id in ("CUST-1042", "CUST-1355")
+        }
+    )
+    return (
+        PaymentProcess(
+            DemoAgent(),
+            DemoGate(),
+            effector,
+            ledger,
+            policy_config_provider=provider,
+        ),
+        effector,
+        ledger,
+    )
 
 
 def test_harness_routes_all_three_pinned_cases_to_expected_paths():
@@ -115,7 +158,7 @@ def test_human_approval_contains_typed_evidence_packet_and_permitted_actions():
 
     assert isinstance(result.escalation, EscalationPayload)
     assert result.escalation.gate == "G1"
-    assert result.escalation.proposal.proposed_value == "4628492309"
+    assert result.escalation.proposal.proposed_value == "8823004417"
     assert result.escalation.evidence[0].source == "test-fixture"
     assert result.escalation.permitted_actions == ("approve", "edit", "reject", "escalate")
 
