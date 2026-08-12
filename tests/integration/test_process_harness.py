@@ -198,7 +198,7 @@ def test_maestro_flow_models_the_real_control_path():
     assert nodes_by_id["repairAgent"]["type"].startswith("uipath.core.agent.")
     assert nodes_by_id["policyGate"]["type"] == "core.action.script"
     assert nodes_by_id["humanEscalation"]["type"] == (
-        "uipath.human-in-the-loop"
+        "uipath.human-in-the-loop.quick-form"
     )
     assert nodes_by_id["autoEffect"]["type"] == "core.action.script"
     assert nodes_by_id["humanEffect"]["type"] == "core.action.script"
@@ -216,7 +216,9 @@ def test_maestro_flow_models_the_real_control_path():
         ("routeDecision", "false", "humanTaskEligible"),
         ("humanTaskEligible", "false", "terminalLedger"),
         ("humanTaskEligible", "true", "escalationPacket"),
-        ("humanEscalation", "completed", "humanApprovalDecision"),
+        ("humanEscalation", "completed", "callbackNoEffectDecision"),
+        ("callbackNoEffectDecision", "true", "humanNoEffectLedger"),
+        ("callbackNoEffectDecision", "false", "humanApprovalDecision"),
         ("humanApprovalDecision", "true", "humanEffect"),
         ("humanApprovalDecision", "false", "humanNoEffectLedger"),
     }.issubset(connected)

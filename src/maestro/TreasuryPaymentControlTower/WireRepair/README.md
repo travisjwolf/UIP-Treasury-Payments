@@ -14,10 +14,20 @@ lane:
    the exact C1 seven-field escalation packet and open an OOTB Action Center
    QuickForm.
 4. Approve or evidence-backed same-field Edit reaches the separately
-   credentialed sandbox effector. Reject/Escalate never reaches an effector.
-5. Every path returns an ordered ledger transition packet. Effectors record
-   before/after values, authorization identity, credential identity, and
-   `payment_write_performed: false`; no node writes to a payment system.
+   credentialed sandbox effector only from an overridable approval path.
+   Reject/Escalate never reaches an effector. `CALLBACK_THEN_HUMAN` offers
+   `Provide Info` and is structurally routed to a no-effect ledger regardless of
+   the selected QuickForm outcome.
+5. Every terminal path returns the same typed `caseLedger` record. Effectors
+   record before/after values, policy authorization, credential identity, and
+   `payment_write_performed: false`; no node writes to a payment system. Agent
+   and script failures route to `incidentLedger` so the case does not disappear
+   as an unobserved Flow fault.
+
+The QuickForm result does not expose the authenticated performer identity. The
+Flow therefore records the selected action, task node, and Flow instance while
+setting `performer_identity` to `null`; Action Center's own task audit is the
+authoritative reviewer record. It never invents a reviewer identity.
 
 The richer standalone `wire-repair-approval` Coded Action App carries the same
 escalation contract, but the Flow deliberately uses QuickForm until the staging
@@ -31,3 +41,9 @@ generated resource files from this project.
 uip maestro flow format WireRepair.flow
 uip maestro flow validate WireRepair.flow --strict-bindings --output json
 ```
+
+UiPath CLI 1.196.4 currently emits a non-fatal agent folder-binding warning
+during `uip solution pack --dry-run` even though strict Flow validation and the
+solution pack both report `Valid`. The deployable top-level `folderPath`
+binding is `TreasuryPayments`; keep the registry-derived definition verbatim
+and recheck this warning after a CLI upgrade.

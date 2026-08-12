@@ -17,6 +17,7 @@ FLOW_PATH = (
     / "WireRepair"
     / "WireRepair.flow"
 )
+POLICY_GATE_SCRIPT_PATH = FLOW_PATH.parent / "scripts" / "policy-gate.js"
 
 
 def _flow() -> dict:
@@ -57,6 +58,44 @@ def _fixture(case_id: str) -> PaymentFixture:
     )
 
 
+def _valid_gate_variables(case_id: str = "WIRE-8802") -> dict:
+    fixture = _fixture(case_id)
+    agent_output = AgentOutput.model_validate(
+        {
+            "outcome": "RESOLVED",
+            "proposed_action": {
+                "field": "beneficiary_name",
+                "current_value": fixture.payment_case.beneficiary_name,
+                "proposed_value": "PACIFIC STEEL & SUPPLY",
+            },
+            "confidence": 0.96,
+            "evidence": [],
+            "reasoning_summary": "Evidence-backed fixture repair.",
+            "tools_called": ["counterparty_history"],
+        }
+    )
+    policy_config = PolicyConfig(
+        customer_id=fixture.payment_case.customer_id,
+        same_day_beneficiary_velocity_threshold_usd=5_000_000.0,
+    )
+    return {
+        "start": {
+            "output": {
+                "payment_case": fixture.payment_case.model_dump(mode="json"),
+                "gate_context": fixture.gate_context.model_dump(mode="json"),
+                "policy_config": policy_config.model_dump(mode="json"),
+            }
+        },
+        "repairAgent": {"output": agent_output.model_dump(mode="json")},
+    }
+
+
+def test_embedded_policy_gate_matches_reviewable_sidecar_source():
+    assert _node(_flow(), "policyGate")["inputs"]["script"] == (
+        POLICY_GATE_SCRIPT_PATH.read_text(encoding="utf-8").rstrip("\r\n")
+    )
+
+
 def test_flow_has_no_mock_or_caller_controlled_auto_apply_path():
     flow = _flow()
     node_types = {node["type"] for node in flow["nodes"]}
@@ -75,6 +114,9 @@ def test_flow_has_no_mock_or_caller_controlled_auto_apply_path():
     assert _node(flow, "end")["outputs"]["reviewedProposedValue"] == {
         "source": "=js:$vars.reviewedProposedValue"
     }
+    assert _node(flow, "end")["outputs"]["caseLedger"] == {
+        "source": "=js:$vars.ledgerState"
+    }
 
     repair_agent = _node(flow, "repairAgent")
     assert repair_agent == {
@@ -86,6 +128,7 @@ def test_flow_has_no_mock_or_caller_controlled_auto_apply_path():
             "payment_case": "=js:$vars.start.output.payment_case",
             "gate_context": "=js:$vars.start.output.gate_context",
             "demo_role": "=js:$vars.start.output.demo_role",
+            "errorHandlingEnabled": True,
         },
     }
     agent_bindings = [
@@ -249,18 +292,236 @@ def test_g2_in_embedded_gate_is_a_terminal_non_overridable_result():
     assert terminal_edge["targetNodeId"] == "terminalLedger"
 
 
+def test_embedded_gate_fails_closed_on_invalid_configurable_policy_contract():
+    script = _node(_flow(), "policyGate")["inputs"]["script"]
+    invalid_configs = []
+
+    for missing in (
+        "customer_id",
+        "auto_apply_amount_threshold_usd",
+        "minimum_confidence",
+        "same_day_beneficiary_velocity_threshold_usd",
+        "cutoff_escalation_minutes",
+    ):
+        variables = _valid_gate_variables()
+        del variables["start"]["output"]["policy_config"][missing]
+        if missing == "auto_apply_amount_threshold_usd":
+            variables["start"]["output"]["payment_case"]["amount_usd"] = 300_000.0
+        invalid_configs.append((f"missing {missing}", variables))
+
+    for field, value in (
+        ("auto_apply_amount_threshold_usd", "250000"),
+        ("minimum_confidence", float("nan")),
+        ("same_day_beneficiary_velocity_threshold_usd", float("inf")),
+        ("cutoff_escalation_minutes", 0),
+    ):
+        variables = _valid_gate_variables()
+        variables["start"]["output"]["policy_config"][field] = value
+        invalid_configs.append((f"invalid {field}", variables))
+
+    for label, variables in invalid_configs:
+        rejected = _script_process(script, variables)
+        assert rejected.returncode != 0, label
+        assert "PolicyConfig" in rejected.stderr, label
+
+
+def test_embedded_gate_fails_closed_on_malformed_payment_context_and_agent_contracts():
+    script = _node(_flow(), "policyGate")["inputs"]["script"]
+    malformed = []
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["payment_case"]["amount_usd"] = "84500"
+    malformed.append(("payment amount type", "PaymentCase", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["payment_case"]["amount_usd"] = float("inf")
+    malformed.append(("payment amount finite", "PaymentCase", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["payment_case"]["value_date"] = "2026-02-31"
+    malformed.append(("payment impossible value date", "PaymentCase", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["payment_case"]["value_date"] = "0000-01-01"
+    malformed.append(("payment year zero", "PaymentCase", variables))
+
+    variables = _valid_gate_variables()
+    del variables["start"]["output"]["payment_case"]["customer_name"]
+    malformed.append(("payment missing field", "PaymentCase", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["first_time_counterparty"] = "false"
+    malformed.append(("context boolean type", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    del variables["start"]["output"]["gate_context"]["cutoff_at"]
+    malformed.append(("context missing field", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["evaluated_at"] = "not-a-date"
+    malformed.append(("context invalid evaluated_at", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["evaluated_at"] = "0Z"
+    malformed.append(("context truncated evaluated_at", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["cutoff_at"] = (
+        "2026-02-30T17:30:00Z"
+    )
+    malformed.append(("context impossible cutoff date", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["cutoff_at"] = (
+        "0000-01-01T17:30:00Z"
+    )
+    malformed.append(("context cutoff year zero", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["cutoff_at"] = (
+        "2026-08-07T17:30:00+99:00"
+    )
+    malformed.append(("context invalid cutoff offset", "GateContext", variables))
+
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["cutoff_at"] = "2026-08-07T17:30:00"
+    malformed.append(("context cutoff missing timezone", "GateContext", variables))
+
+    for field in (
+        "outcome",
+        "confidence",
+        "evidence",
+        "reasoning_summary",
+        "tools_called",
+    ):
+        variables = _valid_gate_variables()
+        del variables["repairAgent"]["output"][field]
+        malformed.append((f"agent missing {field}", "AgentOutput", variables))
+
+    variables = _valid_gate_variables()
+    variables["repairAgent"]["output"]["outcome"] = "MADE_UP"
+    malformed.append(("agent outcome enum", "AgentOutput", variables))
+
+    variables = _valid_gate_variables()
+    variables["repairAgent"]["output"]["confidence"] = 1.1
+    malformed.append(("agent confidence range", "AgentOutput", variables))
+
+    variables = _valid_gate_variables()
+    variables["repairAgent"]["output"]["proposed_action"]["current_value"] = True
+    malformed.append(("proposal scalar type", "AgentOutput", variables))
+
+    variables = _valid_gate_variables()
+    variables["repairAgent"]["output"]["evidence"] = [{"case_id": "WIRE-8802"}]
+    malformed.append(("evidence shape", "AgentOutput", variables))
+
+    for label, contract, variables in malformed:
+        rejected = _script_process(script, variables)
+        assert rejected.returncode != 0, label
+        assert contract in rejected.stderr, label
+
+
+@pytest.mark.parametrize(
+    ("gate", "sanctions_status", "proposed_action", "expected_result"),
+    [
+        ("G0", "review", None, "COMPLIANCE_REFERRAL"),
+        (
+            "G1",
+            "clear",
+            {
+                "field": "beneficiary_account",
+                "current_value": "882300441",
+                "proposed_value": "8823004417",
+            },
+            "HUMAN_APPROVAL",
+        ),
+        (
+            "G2",
+            "clear",
+            {
+                "field": "currency",
+                "current_value": "USD",
+                "proposed_value": "EUR",
+            },
+            "HARD_STOP",
+        ),
+    ],
+)
+def test_fixed_gates_precede_configurable_contract_validation(
+    gate: str,
+    sanctions_status: str,
+    proposed_action: dict | None,
+    expected_result: str,
+):
+    script = _node(_flow(), "policyGate")["inputs"]["script"]
+    variables = _valid_gate_variables()
+    variables["start"]["output"]["gate_context"]["sanctions_status"] = (
+        sanctions_status
+    )
+    variables["repairAgent"]["output"]["proposed_action"] = proposed_action
+    if proposed_action is None:
+        variables["repairAgent"]["output"]["outcome"] = "NEEDS_INFO"
+    variables["start"]["output"]["policy_config"]["customer_id"] = "WRONG-CUSTOMER"
+
+    result = _run_script(script, variables)
+
+    assert result["gate"] == gate
+    assert result["result"] == expected_result
+
+
+def test_fixed_gates_precede_unrelated_full_agent_contract_validation():
+    script = _node(_flow(), "policyGate")["inputs"]["script"]
+
+    sanctions = _valid_gate_variables()
+    sanctions["start"]["output"]["gate_context"]["sanctions_status"] = "match"
+    del sanctions["repairAgent"]["output"]["confidence"]
+    assert _run_script(script, sanctions)["gate"] == "G0"
+
+    account = _valid_gate_variables()
+    account["repairAgent"]["output"]["proposed_action"] = {
+        "field": "beneficiary_account",
+        "current_value": "882300441",
+        "proposed_value": "8823004417",
+    }
+    del account["repairAgent"]["output"]["tools_called"]
+    assert _run_script(script, account)["gate"] == "G1"
+
+    amount = _valid_gate_variables()
+    amount["repairAgent"]["output"]["proposed_action"] = {
+        "field": "amount_usd",
+        "current_value": 84_500.0,
+        "proposed_value": 84_501.0,
+    }
+    del amount["repairAgent"]["output"]["evidence"]
+    assert _run_script(script, amount)["gate"] == "G2"
+
+
 def test_hitl_packet_schema_completed_route_and_effect_boundary_are_auditable():
     flow = _flow()
     task = _node(flow, "humanEscalation")
     fields = {field["id"]: field for field in task["inputs"]["schema"]["fields"]}
     outcomes = task["inputs"]["schema"]["outcomes"]
 
-    assert task["type"] == "uipath.human-in-the-loop"
+    assert task["type"] == "uipath.human-in-the-loop.quick-form"
+    assert "type" not in task["inputs"]
+    quick_form_definition = next(
+        item
+        for item in flow["definitions"]
+        if item["nodeType"] == "uipath.human-in-the-loop.quick-form"
+    )
+    assert quick_form_definition["sortOrder"] == 27
+    assert quick_form_definition["runtimeConstraints"] == {
+        "exclude": ["api-function"]
+    }
+    assert not any(
+        item["nodeType"] == "uipath.human-in-the-loop"
+        for item in flow["definitions"]
+    )
     assert set(fields) == {
         "payment",
         "proposalfield",
         "currentvalue",
         "proposedvalue",
+        "callbackinfo",
         "gate",
         "reason",
         "evidence",
@@ -271,6 +532,7 @@ def test_hitl_packet_schema_completed_route_and_effect_boundary_are_auditable():
     assert [item["name"] for item in outcomes] == [
         "Approve",
         "Edit",
+        "Provide Info",
         "Reject",
         "Escalate",
     ]
@@ -322,6 +584,204 @@ def test_hitl_packet_schema_completed_route_and_effect_boundary_are_auditable():
         "CASE_STATE_UPDATED",
     ):
         assert transition in ledger_scripts
+
+
+def test_callback_lane_records_information_and_can_never_reach_an_effector():
+    flow = _flow()
+    task = _node(flow, "humanEscalation")
+    callback_decision = _node(flow, "callbackNoEffectDecision")
+
+    assert callback_decision["inputs"]["expression"] == (
+        '$vars.policyGate.output.result === "CALLBACK_THEN_HUMAN"'
+    )
+    assert {
+        (edge["sourceNodeId"], edge["sourcePort"], edge["targetNodeId"])
+        for edge in flow["edges"]
+        if edge["sourceNodeId"] in {"humanEscalation", "callbackNoEffectDecision"}
+    } == {
+        ("humanEscalation", "completed", "callbackNoEffectDecision"),
+        ("callbackNoEffectDecision", "true", "humanNoEffectLedger"),
+        ("callbackNoEffectDecision", "false", "humanApprovalDecision"),
+    }
+    assert "Provide Info" in task["outputs"]["status"]["enum"]
+
+    ledger = _run_script(
+        _node(flow, "humanNoEffectLedger")["inputs"]["script"],
+        {
+            "start": {"output": {"payment_case": {"case_id": "WIRE-8877"}}},
+            "policyGate": {
+                "output": {
+                    "result": "CALLBACK_THEN_HUMAN",
+                    "gate": "G9",
+                    "reason": "Additional information is required.",
+                }
+            },
+            "humanEscalation": {
+                "status": "Provide Info",
+                "output": {"callbackinfo": "Confirmed invoice 45018 by callback."},
+            },
+        },
+    )
+    assert ledger["path"] == "CALLBACK_THEN_HUMAN"
+    assert ledger["final_status"] == "CALLBACK_INFORMATION_RECORDED"
+    assert ledger["provided_information"] == "Confirmed invoice 45018 by callback."
+    assert ledger["effect"] is None
+    assert ledger["payment_write_performed"] is False
+
+    blank_information = _script_process(
+        _node(flow, "humanNoEffectLedger")["inputs"]["script"],
+        {
+            "start": {"output": {"payment_case": {"case_id": "WIRE-8877"}}},
+            "policyGate": {
+                "output": {
+                    "result": "CALLBACK_THEN_HUMAN",
+                    "gate": "G9",
+                    "reason": "Additional information is required.",
+                }
+            },
+            "humanEscalation": {
+                "status": "Provide Info",
+                "output": {"callbackinfo": "   "},
+            },
+        },
+    )
+    assert blank_information.returncode != 0
+    assert "requires nonblank callback information" in blank_information.stderr
+
+    rejected = _script_process(
+        _node(flow, "humanEffect")["inputs"]["script"],
+        {
+            "start": {"output": {"payment_case": {"case_id": "WIRE-8877"}}},
+            "escalationPacket": {"output": {"proposal": None, "evidence": []}},
+            "policyGate": {"output": {"result": "CALLBACK_THEN_HUMAN"}},
+            "humanEscalation": {"status": "Approve", "output": {}},
+        },
+    )
+    assert rejected.returncode != 0
+    assert "cannot authorize an effect" in rejected.stderr
+
+
+def test_action_and_agent_errors_route_to_a_single_observable_incident_ledger():
+    flow = _flow()
+    protected = {
+        "repairAgent",
+        "policyGate",
+        "autoEffect",
+        "autoLedger",
+        "terminalLedger",
+        "escalationPacket",
+        "taskProjection",
+        "humanEffect",
+        "humanEffectLedger",
+        "humanNoEffectLedger",
+    }
+
+    for node_id in protected:
+        assert _node(flow, node_id)["inputs"]["errorHandlingEnabled"] is True
+        assert any(
+            edge["sourceNodeId"] == node_id
+            and edge["sourcePort"] == "error"
+            and edge["targetNodeId"] == "incidentLedger"
+            for edge in flow["edges"]
+        )
+
+    assert "errorHandlingEnabled" not in _node(flow, "incidentLedger")["inputs"]
+    assert any(
+        edge["sourceNodeId"] == "incidentLedger"
+        and edge["sourcePort"] == "success"
+        and edge["targetNodeId"] == "end"
+        for edge in flow["edges"]
+    )
+
+    incident = _run_script(
+        _node(flow, "incidentLedger")["inputs"]["script"],
+        {
+            "start": {"output": {"payment_case": {"case_id": "WIRE-8802"}}},
+            "policyGate": {
+                "error": {
+                    "code": "CONTRACT_REJECTED",
+                    "message": "AgentOutput confidence is missing.",
+                    "category": "validation",
+                    "status": 500,
+                }
+            },
+        },
+    )
+    assert incident["path"] == "PROCESS_INCIDENT"
+    assert incident["final_status"] == "PROCESS_INCIDENT_RECORDED"
+    assert incident["incident"] == {
+        "source_node": "policyGate",
+        "code": "CONTRACT_REJECTED",
+        "message": "AgentOutput confidence is missing.",
+        "category": "validation",
+        "status": "500",
+        "flow_instance_id": None,
+    }
+
+
+def test_every_terminal_route_updates_the_typed_case_ledger_output():
+    flow = _flow()
+    globals_by_id = {item["id"]: item for item in flow["variables"]["globals"]}
+    updates = flow["variables"]["variableUpdates"]
+
+    assert globals_by_id["ledgerState"]["direction"] == "inout"
+    assert globals_by_id["ledgerState"]["type"] == "object"
+    assert globals_by_id["caseLedger"]["direction"] == "out"
+    assert globals_by_id["caseLedger"]["type"] == "object"
+    ledger_schema = globals_by_id["caseLedger"]["schema"]
+    assert globals_by_id["ledgerState"]["schema"] == ledger_schema
+    assert set(globals_by_id["ledgerState"]["defaultValue"]) == set(
+        ledger_schema["required"]
+    )
+    assert ledger_schema["additionalProperties"] is False
+    assert set(ledger_schema["required"]) == {
+        "case_id",
+        "path",
+        "final_status",
+        "transitions",
+        "gate",
+        "reason",
+        "human_action",
+        "effect",
+        "incident",
+        "reviewer_provenance",
+        "payment_write_performed",
+    }
+    end_case_ledger = next(
+        item for item in flow["variables"]["nodes"] if item["id"] == "end.caseLedger"
+    )
+    assert end_case_ledger["type"] == "object"
+    assert end_case_ledger["schema"] == ledger_schema
+    end_ledger_state = next(
+        item for item in flow["variables"]["nodes"] if item["id"] == "end.ledgerState"
+    )
+    assert end_ledger_state["type"] == "object"
+    assert end_ledger_state["schema"] == ledger_schema
+    for node_id in (
+        "autoLedger",
+        "terminalLedger",
+        "humanEffectLedger",
+        "humanNoEffectLedger",
+        "incidentLedger",
+    ):
+        assert updates[node_id] == [
+            {
+                "variableId": "ledgerState",
+                "expression": f"=js:$vars.{node_id}.output",
+            }
+        ]
+        script = _node(flow, node_id)["inputs"]["script"]
+        for field in (
+            "case_id",
+            "path",
+            "final_status",
+            "transitions",
+            "effect",
+            "incident",
+            "reviewer_provenance",
+            "payment_write_performed",
+        ):
+            assert field in script
 
 
 def test_flow_effectors_parse_canonical_json_evidence_and_fail_closed_cross_case():
@@ -411,3 +871,12 @@ def test_flow_effectors_parse_canonical_json_evidence_and_fail_closed_cross_case
     assert human_result["audit"]["after"] == "8823004417"
     assert human_result["audit"]["authorization_mode"] == "human_approval"
     assert human_result["audit"]["payment_write_performed"] is False
+    assert human_result["audit"]["authorized_by"] == {
+        "source": "UiPath Action Center QuickForm",
+        "action": "Approve",
+        "performer_identity": None,
+        "performer_identity_available": False,
+        "flow_instance_id": None,
+        "task_node_id": "humanEscalation",
+    }
+    assert "action-center://assigned-reviewer" not in human_script

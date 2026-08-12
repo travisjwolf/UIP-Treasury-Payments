@@ -26,7 +26,8 @@
       "inputs": {
         "payment_case": "=js:$vars.start.output.payment_case",
         "gate_context": "=js:$vars.start.output.gate_context",
-        "demo_role": "=js:$vars.start.output.demo_role"
+        "demo_role": "=js:$vars.start.output.demo_role",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -37,7 +38,8 @@
         "label": "Deterministic policy gate"
       },
       "inputs": {
-        "script": "const payment = $vars.start.output.payment_case; const context = $vars.start.output.gate_context; const config = $vars.start.output.policy_config; const agent = $vars.repairAgent.output; if (!payment || !context || !config || !agent) { throw new Error(\"PaymentCase, GateContext, PolicyConfig, and AgentOutput are required.\"); } if (config.customer_id !== payment.customer_id) { throw new Error(\"PolicyConfig.customer_id must match PaymentCase.customer_id\"); } const decide = (gate, result, reason) => ({ case_id: payment.case_id, gate, result, reason, evaluated_at: context.evaluated_at }); if (context.sanctions_status !== \"clear\") return decide(\"G0\", \"COMPLIANCE_REFERRAL\", \"G0 sanctions status is not clear.\"); const proposal = agent.proposed_action; if (proposal) { if (proposal.field === \"beneficiary_account\") return decide(\"G1\", \"HUMAN_APPROVAL\", \"G1 proposed repair changes the beneficiary account.\"); if ([\"amount_usd\", \"currency\"].includes(proposal.field)) return decide(\"G2\", \"HARD_STOP\", \"G2 proposed repair changes an amount or currency field.\"); if (payment.amount_usd > config.auto_apply_amount_threshold_usd) return decide(\"G3\", \"HUMAN_APPROVAL\", \"G3 payment amount exceeds the auto-apply threshold.\"); if (context.first_time_counterparty) return decide(\"G4\", \"HUMAN_APPROVAL\", \"G4 counterparty has no established payment history.\"); if (agent.confidence < config.minimum_confidence) return decide(\"G5\", \"HUMAN_APPROVAL\", \"G5 proposal confidence is below the configured minimum.\"); if (context.cross_border || payment.currency !== \"USD\") return decide(\"G6\", \"HUMAN_APPROVAL\", \"G6 payment is cross-border or denominated outside USD.\"); if (payment.exception_code === \"EX-07\") return decide(\"G7\", \"HUMAN_APPROVAL\", \"G7 payment is marked as a duplicate suspect.\"); if (context.same_day_beneficiary_total_usd > config.same_day_beneficiary_velocity_threshold_usd) return decide(\"G8\", \"HUMAN_APPROVAL\", \"G8 beneficiary same-day value exceeds the velocity threshold.\"); } if (agent.outcome === \"NEEDS_INFO\") return decide(\"G9\", \"CALLBACK_THEN_HUMAN\", \"G9 agent needs additional information before a repair can proceed.\"); if ([\"AMBIGUOUS\", \"EXHAUSTED\"].includes(agent.outcome)) return decide(\"G9\", \"ESCALATE\", \"G9 agent outcome requires escalation with its full trace.\"); if ((new Date(context.cutoff_at).getTime() - new Date(context.evaluated_at).getTime()) < config.cutoff_escalation_minutes * 60000) return decide(\"G10\", \"PRIORITY_ESCALATION\", \"G10 remaining cutoff time is inside the priority escalation window.\"); if (agent.outcome === \"BLOCKED_POLICY\") return decide(null, \"ESCALATE\", \"Agent reported a policy block not explained by an earlier deterministic gate.\"); return decide(null, \"AUTO_APPLY\", \"No deterministic policy gate fired; the repair is eligible for auto-apply.\");"
+        "script": "const payment = $vars.start.output.payment_case;\nconst context = $vars.start.output.gate_context;\nconst config = $vars.start.output.policy_config;\nconst agent = $vars.repairAgent.output;\n\nconst fail = (contract, message) => {\n  throw new Error(`${contract}: ${message}`);\n};\nconst object = (value, contract) => {\n  if (!value || typeof value !== \"object\" || Array.isArray(value)) {\n    fail(contract, \"must be an object\");\n  }\n};\nconst shape = (value, allowed, required, contract) => {\n  object(value, contract);\n  const extras = Object.keys(value).filter((key) => !allowed.includes(key));\n  if (extras.length) fail(contract, `unexpected field ${extras[0]}`);\n  const missing = required.filter((key) => !Object.prototype.hasOwnProperty.call(value, key));\n  if (missing.length) fail(contract, `missing field ${missing[0]}`);\n};\nconst string = (value, contract, field, allowBlank = false) => {\n  if (typeof value !== \"string\" || (!allowBlank && value.trim() === \"\")) {\n    fail(contract, `${field} must be ${allowBlank ? \"a string\" : \"a nonblank string\"}`);\n  }\n};\nconst number = (value, contract, field, minimum, maximum, exclusiveMinimum = false) => {\n  if (typeof value !== \"number\" || !Number.isFinite(value)) {\n    fail(contract, `${field} must be a finite number`);\n  }\n  if (minimum !== undefined && (exclusiveMinimum ? value <= minimum : value < minimum)) {\n    fail(contract, `${field} is below its minimum`);\n  }\n  if (maximum !== undefined && value > maximum) {\n    fail(contract, `${field} is above its maximum`);\n  }\n};\nconst integer = (value, contract, field, minimum, exclusiveMinimum = false) => {\n  number(value, contract, field, minimum, undefined, exclusiveMinimum);\n  if (!Number.isInteger(value)) fail(contract, `${field} must be an integer`);\n};\nconst scalar = (value, contract, field) => {\n  if (typeof value === \"string\") return;\n  if (typeof value === \"number\" && Number.isFinite(value)) return;\n  fail(contract, `${field} must be a string or finite number`);\n};\nconst dateOnly = (value, contract, field) => {\n  string(value, contract, field);\n  const match = /^(\\d{4})-(\\d{2})-(\\d{2})$/.exec(value);\n  const parsed = match ? new Date(`${value}T00:00:00Z`) : null;\n  const roundTrip = parsed && Number.isFinite(parsed.getTime())\n    ? parsed.toISOString().slice(0, 10)\n    : \"\";\n  if (!match || Number(match[1]) < 1 || roundTrip !== value) {\n    fail(contract, `${field} must be an ISO date`);\n  }\n};\nconst awareDateTime = (value, contract, field) => {\n  string(value, contract, field);\n  const match = /^(\\d{4})-(\\d{2})-(\\d{2})T(\\d{2}):(\\d{2}):(\\d{2})(?:\\.(\\d{1,6}))?(Z|([+-])(\\d{2}):(\\d{2}))$/.exec(value);\n  if (!match) {\n    fail(contract, `${field} must be an ISO timestamp with timezone`);\n  }\n  const year = Number(match[1]);\n  const month = Number(match[2]);\n  const day = Number(match[3]);\n  const hour = Number(match[4]);\n  const minute = Number(match[5]);\n  const second = Number(match[6]);\n  const millisecond = Number((match[7] || \"\").padEnd(3, \"0\").slice(0, 3));\n  const offsetHour = match[8] === \"Z\" ? 0 : Number(match[10]);\n  const offsetMinute = match[8] === \"Z\" ? 0 : Number(match[11]);\n  const calendar = new Date(0);\n  calendar.setUTCFullYear(year, month - 1, day);\n  calendar.setUTCHours(hour, minute, second, millisecond);\n  const calendarMatches = calendar.getUTCFullYear() === year\n    && calendar.getUTCMonth() === month - 1\n    && calendar.getUTCDate() === day\n    && calendar.getUTCHours() === hour\n    && calendar.getUTCMinutes() === minute\n    && calendar.getUTCSeconds() === second;\n  if (year < 1 || !calendarMatches || offsetHour > 23 || offsetMinute > 59 || !Number.isFinite(Date.parse(value))) {\n    fail(contract, `${field} must be an ISO timestamp with timezone`);\n  }\n};\nconst optional = (value, validator) => {\n  if (value !== undefined && value !== null) validator(value);\n};\nconst enumValue = (value, values, contract, field) => {\n  if (!values.includes(value)) fail(contract, `${field} is not an allowed value`);\n};\n\nconst proposalFields = [\n  \"amount_usd\",\n  \"beneficiary_account\",\n  \"beneficiary_bank_aba\",\n  \"beneficiary_name\",\n  \"currency\",\n  \"customer_name\",\n  \"remittance_info\",\n];\nconst outcomes = [\n  \"RESOLVED\",\n  \"RESOLVED_LOW_CONFIDENCE\",\n  \"AMBIGUOUS\",\n  \"NEEDS_INFO\",\n  \"EXHAUSTED\",\n  \"BLOCKED_POLICY\",\n];\nconst validateProposal = (proposal, contract) => {\n  shape(\n    proposal,\n    [\"field\", \"current_value\", \"proposed_value\"],\n    [\"field\", \"current_value\", \"proposed_value\"],\n    contract,\n  );\n  enumValue(proposal.field, proposalFields, contract, \"field\");\n  scalar(proposal.current_value, contract, \"current_value\");\n  scalar(proposal.proposed_value, contract, \"proposed_value\");\n  if (typeof proposal.proposed_value === \"string\" && proposal.proposed_value.trim() === \"\") {\n    fail(contract, \"proposed_value must not be blank\");\n  }\n  if (proposal.current_value === proposal.proposed_value) {\n    fail(contract, \"proposed_value must differ from current_value\");\n  }\n};\nconst validatePayment = () => {\n  const allowed = [\n    \"case_id\", \"rail\", \"direction\", \"amount_usd\", \"currency\", \"value_date\",\n    \"cutoff_time\", \"sla_deadline\", \"source_channel\", \"customer_id\", \"customer_name\",\n    \"beneficiary_name\", \"beneficiary_account\", \"beneficiary_bank_aba\", \"remittance_info\",\n    \"exception_code\", \"exception_type\", \"current_queue\", \"status\", \"worked_by\",\n    \"confidence\", \"proposed_action\", \"outcome\", \"touch_count\", \"cycle_time\",\n  ];\n  const required = [\n    \"case_id\", \"rail\", \"direction\", \"amount_usd\", \"currency\", \"value_date\",\n    \"cutoff_time\", \"source_channel\", \"customer_id\", \"customer_name\", \"beneficiary_name\",\n    \"beneficiary_account\", \"beneficiary_bank_aba\", \"remittance_info\", \"exception_code\",\n    \"exception_type\", \"current_queue\", \"status\",\n  ];\n  shape(payment, allowed, required, \"PaymentCase\");\n  [\"case_id\", \"rail\", \"source_channel\", \"customer_id\", \"customer_name\", \"beneficiary_name\",\n    \"beneficiary_account\", \"beneficiary_bank_aba\", \"exception_type\", \"current_queue\", \"status\"]\n    .forEach((field) => string(payment[field], \"PaymentCase\", field));\n  string(payment.remittance_info, \"PaymentCase\", \"remittance_info\", true);\n  enumValue(payment.direction, [\"outbound\", \"inbound\"], \"PaymentCase\", \"direction\");\n  number(payment.amount_usd, \"PaymentCase\", \"amount_usd\", 0, undefined, true);\n  if (typeof payment.currency !== \"string\" || !/^[A-Z]{3}$/.test(payment.currency)) {\n    fail(\"PaymentCase\", \"currency must be a three-letter uppercase code\");\n  }\n  dateOnly(payment.value_date, \"PaymentCase\", \"value_date\");\n  if (typeof payment.cutoff_time !== \"string\" || !/^(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?$/.test(payment.cutoff_time)) {\n    fail(\"PaymentCase\", \"cutoff_time must be HH:MM or HH:MM:SS\");\n  }\n  if (typeof payment.exception_code !== \"string\" || !/^EX-\\d{2}$/.test(payment.exception_code)) {\n    fail(\"PaymentCase\", \"exception_code must match EX-NN\");\n  }\n  optional(payment.sla_deadline, (value) => awareDateTime(value, \"PaymentCase\", \"sla_deadline\"));\n  optional(payment.worked_by, (value) => string(value, \"PaymentCase\", \"worked_by\", true));\n  optional(payment.confidence, (value) => number(value, \"PaymentCase\", \"confidence\", 0, 1));\n  optional(payment.proposed_action, (value) => validateProposal(value, \"PaymentCase.proposed_action\"));\n  optional(payment.outcome, (value) => enumValue(value, outcomes, \"PaymentCase\", \"outcome\"));\n  if (payment.touch_count !== undefined) integer(payment.touch_count, \"PaymentCase\", \"touch_count\", 0);\n  optional(payment.cycle_time, (value) => number(value, \"PaymentCase\", \"cycle_time\", 0));\n};\nconst validateContext = () => {\n  const fields = [\n    \"sanctions_status\", \"first_time_counterparty\", \"same_day_beneficiary_total_usd\",\n    \"cross_border\", \"evaluated_at\", \"cutoff_at\",\n  ];\n  shape(context, fields, fields, \"GateContext\");\n  enumValue(context.sanctions_status, [\"clear\", \"review\", \"match\", \"unknown\"], \"GateContext\", \"sanctions_status\");\n  if (typeof context.first_time_counterparty !== \"boolean\") fail(\"GateContext\", \"first_time_counterparty must be boolean\");\n  if (typeof context.cross_border !== \"boolean\") fail(\"GateContext\", \"cross_border must be boolean\");\n  number(context.same_day_beneficiary_total_usd, \"GateContext\", \"same_day_beneficiary_total_usd\", 0);\n  awareDateTime(context.evaluated_at, \"GateContext\", \"evaluated_at\");\n  awareDateTime(context.cutoff_at, \"GateContext\", \"cutoff_at\");\n};\nconst validateAgent = () => {\n  const fields = [\"outcome\", \"proposed_action\", \"confidence\", \"evidence\", \"reasoning_summary\", \"tools_called\"];\n  shape(agent, fields, fields, \"AgentOutput\");\n  enumValue(agent.outcome, outcomes, \"AgentOutput\", \"outcome\");\n  if (agent.proposed_action !== null) validateProposal(agent.proposed_action, \"AgentOutput.proposed_action\");\n  if ([\"RESOLVED\", \"RESOLVED_LOW_CONFIDENCE\"].includes(agent.outcome) && agent.proposed_action === null) {\n    fail(\"AgentOutput\", \"resolved outcomes require proposed_action\");\n  }\n  number(agent.confidence, \"AgentOutput\", \"confidence\", 0, 1);\n  if (!Array.isArray(agent.evidence)) fail(\"AgentOutput\", \"evidence must be an array\");\n  agent.evidence.forEach((item, index) => {\n    const contract = `AgentOutput.evidence[${index}]`;\n    const fields = [\"case_id\", \"type\", \"source\", \"content\", \"produced_by\", \"timestamp\"];\n    shape(item, fields, fields, contract);\n    string(item.case_id, contract, \"case_id\");\n    enumValue(item.type, [\"lookup\", \"history_match\", \"sanctions\", \"document\", \"call_transcript\"], contract, \"type\");\n    string(item.source, contract, \"source\");\n    string(item.produced_by, contract, \"produced_by\");\n    awareDateTime(item.timestamp, contract, \"timestamp\");\n    if (typeof item.content !== \"string\" && (!item.content || typeof item.content !== \"object\" || Array.isArray(item.content))) {\n      fail(contract, \"content must be a string or object\");\n    }\n  });\n  string(agent.reasoning_summary, \"AgentOutput\", \"reasoning_summary\", true);\n  if (!Array.isArray(agent.tools_called) || agent.tools_called.some((item) => typeof item !== \"string\")) {\n    fail(\"AgentOutput\", \"tools_called must be an array of strings\");\n  }\n};\nconst validateFixedGateAgent = () => {\n  object(agent, \"AgentOutput\");\n  if (!Object.prototype.hasOwnProperty.call(agent, \"proposed_action\")) {\n    fail(\"AgentOutput\", \"missing field proposed_action\");\n  }\n  if (agent.proposed_action !== null) {\n    validateProposal(agent.proposed_action, \"AgentOutput.proposed_action\");\n  }\n};\nconst validateConfig = () => {\n  const fields = [\n    \"customer_id\", \"auto_apply_amount_threshold_usd\", \"minimum_confidence\",\n    \"same_day_beneficiary_velocity_threshold_usd\", \"cutoff_escalation_minutes\",\n  ];\n  shape(config, fields, fields, \"PolicyConfig\");\n  string(config.customer_id, \"PolicyConfig\", \"customer_id\");\n  number(config.auto_apply_amount_threshold_usd, \"PolicyConfig\", \"auto_apply_amount_threshold_usd\", 0, undefined, true);\n  number(config.minimum_confidence, \"PolicyConfig\", \"minimum_confidence\", 0, 1);\n  number(config.same_day_beneficiary_velocity_threshold_usd, \"PolicyConfig\", \"same_day_beneficiary_velocity_threshold_usd\", 0, undefined, true);\n  integer(config.cutoff_escalation_minutes, \"PolicyConfig\", \"cutoff_escalation_minutes\", 0, true);\n  if (config.customer_id !== payment.customer_id) {\n    fail(\"PolicyConfig\", \"customer_id must match PaymentCase.customer_id\");\n  }\n};\n\nvalidatePayment();\nvalidateContext();\n\nconst decide = (gate, result, reason) => ({\n  case_id: payment.case_id,\n  gate,\n  result,\n  reason,\n  evaluated_at: context.evaluated_at,\n});\nif (context.sanctions_status !== \"clear\") {\n  return decide(\"G0\", \"COMPLIANCE_REFERRAL\", \"G0 sanctions status is not clear.\");\n}\nvalidateFixedGateAgent();\nconst proposal = agent.proposed_action;\nif (proposal) {\n  if (proposal.field === \"beneficiary_account\") {\n    return decide(\"G1\", \"HUMAN_APPROVAL\", \"G1 proposed repair changes the beneficiary account.\");\n  }\n  if ([\"amount_usd\", \"currency\"].includes(proposal.field)) {\n    return decide(\"G2\", \"HARD_STOP\", \"G2 proposed repair changes an amount or currency field.\");\n  }\n}\n\nvalidateAgent();\nvalidateConfig();\nif (proposal) {\n  if (payment.amount_usd > config.auto_apply_amount_threshold_usd) {\n    return decide(\"G3\", \"HUMAN_APPROVAL\", \"G3 payment amount exceeds the auto-apply threshold.\");\n  }\n  if (context.first_time_counterparty) {\n    return decide(\"G4\", \"HUMAN_APPROVAL\", \"G4 counterparty has no established payment history.\");\n  }\n  if (agent.confidence < config.minimum_confidence) {\n    return decide(\"G5\", \"HUMAN_APPROVAL\", \"G5 proposal confidence is below the configured minimum.\");\n  }\n  if (context.cross_border || payment.currency !== \"USD\") {\n    return decide(\"G6\", \"HUMAN_APPROVAL\", \"G6 payment is cross-border or denominated outside USD.\");\n  }\n  if (payment.exception_code === \"EX-07\") {\n    return decide(\"G7\", \"HUMAN_APPROVAL\", \"G7 payment is marked as a duplicate suspect.\");\n  }\n  if (context.same_day_beneficiary_total_usd > config.same_day_beneficiary_velocity_threshold_usd) {\n    return decide(\"G8\", \"HUMAN_APPROVAL\", \"G8 beneficiary same-day value exceeds the velocity threshold.\");\n  }\n}\nif (agent.outcome === \"NEEDS_INFO\") {\n  return decide(\"G9\", \"CALLBACK_THEN_HUMAN\", \"G9 agent needs additional information before a repair can proceed.\");\n}\nif ([\"AMBIGUOUS\", \"EXHAUSTED\"].includes(agent.outcome)) {\n  return decide(\"G9\", \"ESCALATE\", \"G9 agent outcome requires escalation with its full trace.\");\n}\nif ((new Date(context.cutoff_at).getTime() - new Date(context.evaluated_at).getTime()) < config.cutoff_escalation_minutes * 60000) {\n  return decide(\"G10\", \"PRIORITY_ESCALATION\", \"G10 remaining cutoff time is inside the priority escalation window.\");\n}\nif (agent.outcome === \"BLOCKED_POLICY\") {\n  return decide(null, \"ESCALATE\", \"Agent reported a policy block not explained by an earlier deterministic gate.\");\n}\nreturn decide(null, \"AUTO_APPLY\", \"No deterministic policy gate fired; the repair is eligible for auto-apply.\");",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -61,7 +63,8 @@
         "label": "Record authorized sandbox effect"
       },
       "inputs": {
-        "script": "const payment = $vars.start.output.payment_case; const proposal = $vars.repairAgent.output.proposed_action; const evidence = $vars.repairAgent.output.evidence; const decision = $vars.policyGate.output; if (decision.result !== \"AUTO_APPLY\" || !proposal) throw new Error(\"Deterministic AUTO_APPLY authorization and a proposal are required.\"); if ([\"beneficiary_account\", \"amount_usd\", \"currency\"].includes(proposal.field)) throw new Error(\"The proposed field is not eligible for autonomous application.\"); if (payment[proposal.field] !== proposal.current_value) throw new Error(\"Proposal current_value does not match the payment record.\"); if (evidence.some((item) => item.case_id !== payment.case_id)) throw new Error(\"Evidence case_id must match the payment record.\"); const content = (item) => { if (typeof item.content !== \"string\") return item.content; try { return JSON.parse(item.content); } catch { return item.content; } }; const contains = (value, expected) => value === expected || (Array.isArray(value) && value.some((item) => contains(item, expected))) || (value && typeof value === \"object\" && Object.values(value).some((item) => contains(item, expected))); if (!evidence.some((item) => contains(content(item), proposal.proposed_value))) throw new Error(\"Proposed value must be traceable to evidence.\"); return { case_id: payment.case_id, status: \"RECORDED\", audit: { field: proposal.field, before: proposal.current_value, after: proposal.proposed_value, credential_identity: \"sandbox://wire-repair-effector\", authorization_mode: \"auto_apply\", authorized_by: \"deterministic-policy-gate\", gate: decision.gate || \"NONE\", recorded_at: $vars.start.output.gate_context.evaluated_at, payment_write_performed: false } };"
+        "script": "const payment = $vars.start.output.payment_case; const proposal = $vars.repairAgent.output.proposed_action; const evidence = $vars.repairAgent.output.evidence; const decision = $vars.policyGate.output; if (decision.result !== \"AUTO_APPLY\" || !proposal) throw new Error(\"Deterministic AUTO_APPLY authorization and a proposal are required.\"); if ([\"beneficiary_account\", \"amount_usd\", \"currency\"].includes(proposal.field)) throw new Error(\"The proposed field is not eligible for autonomous application.\"); if (payment[proposal.field] !== proposal.current_value) throw new Error(\"Proposal current_value does not match the payment record.\"); if (evidence.some((item) => item.case_id !== payment.case_id)) throw new Error(\"Evidence case_id must match the payment record.\"); const content = (item) => { if (typeof item.content !== \"string\") return item.content; try { return JSON.parse(item.content); } catch { return item.content; } }; const contains = (value, expected) => value === expected || (Array.isArray(value) && value.some((item) => contains(item, expected))) || (value && typeof value === \"object\" && Object.values(value).some((item) => contains(item, expected))); if (!evidence.some((item) => contains(content(item), proposal.proposed_value))) throw new Error(\"Proposed value must be traceable to evidence.\"); return { case_id: payment.case_id, status: \"RECORDED\", audit: { field: proposal.field, before: proposal.current_value, after: proposal.proposed_value, credential_identity: \"sandbox://wire-repair-effector\", authorization_mode: \"auto_apply\", authorized_by: \"deterministic-policy-gate\", gate: decision.gate || \"NONE\", recorded_at: $vars.start.output.gate_context.evaluated_at, payment_write_performed: false } };",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -72,7 +75,8 @@
         "label": "Append auto-apply ledger"
       },
       "inputs": {
-        "script": "return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTO_APPLY_AUTHORIZED\", \"EFFECT_RECORDED\", \"CASE_STATE_UPDATED\"], effect: $vars.autoEffect.output, payment_write_performed: false };"
+        "script": "const decision = $vars.policyGate.output; return { case_id: $vars.start.output.payment_case.case_id, path: \"AUTO_APPLY\", final_status: \"AUTO_APPLY_RECORDED\", transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTO_APPLY_AUTHORIZED\", \"EFFECT_RECORDED\", \"CASE_STATE_UPDATED\"], gate: decision.gate || null, reason: decision.reason, human_action: null, effect: $vars.autoEffect.output, incident: null, reviewer_provenance: null, payment_write_performed: false };",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -96,7 +100,8 @@
         "label": "Append terminal policy ledger"
       },
       "inputs": {
-        "script": "const decision = $vars.policyGate.output; const terminal = decision.result === \"COMPLIANCE_REFERRAL\" ? \"COMPLIANCE_REFERRAL_CREATED\" : \"POLICY_HARD_STOP_RECORDED\"; return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", terminal, \"CASE_STATE_UPDATED\"], gate: decision.gate, reason: decision.reason, overridable_in_app: false, payment_write_performed: false };"
+        "script": "const decision = $vars.policyGate.output; const terminal = decision.result === \"COMPLIANCE_REFERRAL\" ? \"COMPLIANCE_REFERRAL_CREATED\" : \"POLICY_HARD_STOP_RECORDED\"; return { case_id: $vars.start.output.payment_case.case_id, path: decision.result, final_status: terminal, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", terminal, \"CASE_STATE_UPDATED\"], gate: decision.gate, reason: decision.reason, human_action: null, effect: null, incident: null, reviewer_provenance: null, overridable_in_app: false, payment_write_performed: false };",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -107,7 +112,8 @@
         "label": "Build exact escalation packet"
       },
       "inputs": {
-        "script": "const payment = $vars.start.output.payment_case; const agent = $vars.repairAgent.output; const decision = $vars.policyGate.output; const callback = decision.result === \"CALLBACK_THEN_HUMAN\"; return { payment, proposal: agent.proposed_action, gate: decision.gate || \"NONE\", reason: decision.reason, evidence: agent.evidence, cutoff_time: payment.cutoff_time, permitted_actions: callback ? [\"provide_info\", \"approve\", \"reject\", \"escalate\"] : [\"approve\", \"edit\", \"reject\", \"escalate\"] };"
+        "script": "const payment = $vars.start.output.payment_case; const agent = $vars.repairAgent.output; const decision = $vars.policyGate.output; const callback = decision.result === \"CALLBACK_THEN_HUMAN\"; return { payment, proposal: agent.proposed_action, gate: decision.gate || \"NONE\", reason: decision.reason, evidence: agent.evidence, cutoff_time: payment.cutoff_time, permitted_actions: callback ? [\"provide_info\", \"approve\", \"reject\", \"escalate\"] : [\"approve\", \"edit\", \"reject\", \"escalate\"] };",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -118,18 +124,18 @@
         "label": "Project readable task fields"
       },
       "inputs": {
-        "script": "const packet = $vars.escalationPacket.output; const payment = packet.payment; const proposal = packet.proposal; return { payment: `${payment.case_id} | ${payment.customer_name} | ${payment.amount_usd} ${payment.currency} | ${payment.beneficiary_name} | account ${payment.beneficiary_account}`, proposalField: proposal ? proposal.field : \"No proposed field\", currentValue: proposal ? String(proposal.current_value) : \"\", proposedValue: proposal ? String(proposal.proposed_value) : \"\", gate: packet.gate, reason: packet.reason, evidence: JSON.stringify(packet.evidence, null, 2), cutoff: packet.cutoff_time, permittedActions: packet.permitted_actions.join(\", \") };"
+        "script": "const packet = $vars.escalationPacket.output; const payment = packet.payment; const proposal = packet.proposal; return { payment: `${payment.case_id} | ${payment.customer_name} | ${payment.amount_usd} ${payment.currency} | ${payment.beneficiary_name} | account ${payment.beneficiary_account}`, proposalField: proposal ? proposal.field : \"No proposed field\", currentValue: proposal ? String(proposal.current_value) : \"\", proposedValue: proposal ? String(proposal.proposed_value) : \"\", callbackInfo: \"\", gate: packet.gate, reason: packet.reason, evidence: JSON.stringify(packet.evidence, null, 2), cutoff: packet.cutoff_time, permittedActions: packet.permitted_actions.join(\", \") };",
+        "errorHandlingEnabled": true
       }
     },
     {
       "id": "humanEscalation",
-      "type": "uipath.human-in-the-loop",
+      "type": "uipath.human-in-the-loop.quick-form",
       "typeVersion": "1.0",
       "display": {
         "label": "Wire repair approval"
       },
       "inputs": {
-        "type": "quick",
         "title": "Wire repair approval",
         "recipient": {
           "channels": [
@@ -173,6 +179,14 @@
               "direction": "inOut",
               "binding": "vars.taskProjection.output.proposedValue",
               "variable": "reviewedProposedValue"
+            },
+            {
+              "id": "callbackinfo",
+              "label": "Callback / Additional Information",
+              "type": "text",
+              "direction": "inOut",
+              "binding": "vars.taskProjection.output.callbackInfo",
+              "variable": "callbackInformation"
             },
             {
               "id": "gate",
@@ -226,6 +240,13 @@
               "action": "Continue"
             },
             {
+              "id": "provideinfo",
+              "name": "Provide Info",
+              "type": "string",
+              "isPrimary": false,
+              "action": "Continue"
+            },
+            {
               "id": "reject",
               "name": "Reject",
               "type": "string",
@@ -252,11 +273,15 @@
             "proposedvalue": {
               "type": "string"
             },
+            "callbackinfo": {
+              "type": "string"
+            },
             "Action": {
               "type": "string",
               "enum": [
                 "Approve",
                 "Edit",
+                "Provide Info",
                 "Reject",
                 "Escalate"
               ],
@@ -272,11 +297,25 @@
           "enum": [
             "Approve",
             "Edit",
+            "Provide Info",
             "Reject",
             "Escalate"
           ],
           "default": "Approve"
         }
+      }
+    },
+    {
+      "id": "callbackNoEffectDecision",
+      "type": "core.logic.decision",
+      "typeVersion": "1.0.0",
+      "display": {
+        "label": "Callback lane requires no effect?"
+      },
+      "inputs": {
+        "expression": "$vars.policyGate.output.result === \"CALLBACK_THEN_HUMAN\"",
+        "trueLabel": "Record information only",
+        "falseLabel": "Evaluate human authorization"
       }
     },
     {
@@ -287,7 +326,7 @@
         "label": "Human authorized effect?"
       },
       "inputs": {
-        "expression": "[\"Approve\", \"Edit\"].includes($vars.humanEscalation.status)",
+        "expression": "[\"HUMAN_APPROVAL\", \"PRIORITY_ESCALATION\"].includes($vars.policyGate.output.result) && [\"Approve\", \"Edit\"].includes($vars.humanEscalation.status)",
         "trueLabel": "Authorized",
         "falseLabel": "No effect"
       }
@@ -300,7 +339,8 @@
         "label": "Record human-authorized sandbox effect"
       },
       "inputs": {
-        "script": "const payment = $vars.start.output.payment_case; const original = $vars.escalationPacket.output.proposal; const evidence = $vars.escalationPacket.output.evidence; const decision = $vars.policyGate.output; const action = $vars.humanEscalation.status; if (![\"Approve\", \"Edit\"].includes(action) || !original) throw new Error(\"Human approval and an original proposal are required.\"); if ([\"G0\", \"G2\"].includes(decision.gate) || [\"amount_usd\", \"currency\"].includes(original.field)) throw new Error(\"The policy path is non-overridable.\"); if (payment[original.field] !== original.current_value) throw new Error(\"Proposal current_value does not match the payment record.\"); if (evidence.some((item) => item.case_id !== payment.case_id)) throw new Error(\"Evidence case_id must match the payment record.\"); const proposed = $vars.humanEscalation.output.proposedvalue; const content = (item) => { if (typeof item.content !== \"string\") return item.content; try { return JSON.parse(item.content); } catch { return item.content; } }; const contains = (value, expected) => value === expected || String(value) === String(expected) || (Array.isArray(value) && value.some((item) => contains(item, expected))) || (value && typeof value === \"object\" && Object.values(value).some((item) => contains(item, expected))); if (!evidence.some((item) => contains(content(item), proposed))) throw new Error(\"Edited value must remain traceable to evidence.\"); return { case_id: payment.case_id, status: \"RECORDED\", audit: { field: original.field, before: original.current_value, after: proposed, credential_identity: \"sandbox://wire-repair-effector\", authorization_mode: \"human_approval\", authorized_by: \"action-center://assigned-reviewer\", gate: decision.gate || \"NONE\", recorded_at: $vars.start.output.gate_context.evaluated_at, payment_write_performed: false } };"
+        "script": "const payment = $vars.start.output.payment_case; const original = $vars.escalationPacket.output.proposal; const evidence = $vars.escalationPacket.output.evidence; const decision = $vars.policyGate.output; const action = $vars.humanEscalation.status; if (![\"HUMAN_APPROVAL\", \"PRIORITY_ESCALATION\"].includes(decision.result)) throw new Error(\"This policy path cannot authorize an effect.\"); if (![\"Approve\", \"Edit\"].includes(action) || !original) throw new Error(\"Human approval and an original proposal are required.\"); if ([\"G0\", \"G2\"].includes(decision.gate) || [\"amount_usd\", \"currency\"].includes(original.field)) throw new Error(\"The policy path is non-overridable.\"); if (payment[original.field] !== original.current_value) throw new Error(\"Proposal current_value does not match the payment record.\"); if (evidence.some((item) => item.case_id !== payment.case_id)) throw new Error(\"Evidence case_id must match the payment record.\"); const proposed = $vars.humanEscalation.output.proposedvalue; if (!((typeof proposed === \"string\" && proposed.trim() !== \"\") || (typeof proposed === \"number\" && Number.isFinite(proposed)))) throw new Error(\"Reviewed proposed value must be a nonblank string or finite number.\"); if (String(proposed) === String(original.current_value)) throw new Error(\"Reviewed proposed value must differ from the current value.\"); if (action === \"Approve\" && String(proposed) !== String(original.proposed_value)) throw new Error(\"Approve cannot change the original proposed value; use Edit.\"); const content = (item) => { if (typeof item.content !== \"string\") return item.content; try { return JSON.parse(item.content); } catch { return item.content; } }; const contains = (value, expected) => value === expected || String(value) === String(expected) || (Array.isArray(value) && value.some((item) => contains(item, expected))) || (value && typeof value === \"object\" && Object.values(value).some((item) => contains(item, expected))); if (!evidence.some((item) => contains(content(item), proposed))) throw new Error(\"Edited value must remain traceable to evidence.\"); const instanceId = typeof $metadata !== \"undefined\" && $metadata ? $metadata.instanceId : null; const provenance = { source: \"UiPath Action Center QuickForm\", action, performer_identity: null, performer_identity_available: false, flow_instance_id: instanceId, task_node_id: \"humanEscalation\" }; return { case_id: payment.case_id, status: \"RECORDED\", audit: { field: original.field, before: original.current_value, after: proposed, credential_identity: \"sandbox://wire-repair-effector\", authorization_mode: \"human_approval\", authorized_by: provenance, gate: decision.gate || \"NONE\", recorded_at: $vars.start.output.gate_context.evaluated_at, payment_write_performed: false } };",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -311,7 +351,8 @@
         "label": "Append human effect ledger"
       },
       "inputs": {
-        "script": "const actionState = $vars.humanEscalation.status === \"Edit\" ? \"HUMAN_EDITED\" : \"HUMAN_APPROVED\"; return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", \"HUMAN_ESCALATION_CREATED\", actionState, \"EFFECT_RECORDED\", \"CASE_STATE_UPDATED\"], effect: $vars.humanEffect.output, payment_write_performed: false };"
+        "script": "const decision = $vars.policyGate.output; const action = $vars.humanEscalation.status; const actionState = action === \"Edit\" ? \"HUMAN_EDITED\" : \"HUMAN_APPROVED\"; const effect = $vars.humanEffect.output; return { case_id: $vars.start.output.payment_case.case_id, path: decision.result, final_status: \"HUMAN_EFFECT_RECORDED\", transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", \"HUMAN_ESCALATION_CREATED\", actionState, \"EFFECT_RECORDED\", \"CASE_STATE_UPDATED\"], gate: decision.gate || null, reason: decision.reason, human_action: action, effect, incident: null, reviewer_provenance: effect.audit.authorized_by, payment_write_performed: false };",
+        "errorHandlingEnabled": true
       }
     },
     {
@@ -322,7 +363,19 @@
         "label": "Append no-effect human ledger"
       },
       "inputs": {
-        "script": "const state = $vars.humanEscalation.status === \"Reject\" ? \"HUMAN_REJECTED\" : \"HUMAN_ESCALATED\"; return { case_id: $vars.start.output.payment_case.case_id, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", \"HUMAN_ESCALATION_CREATED\", state, \"CASE_STATE_UPDATED\"], payment_write_performed: false };"
+        "script": "const decision = $vars.policyGate.output; const action = $vars.humanEscalation.status; const callback = decision.result === \"CALLBACK_THEN_HUMAN\"; const providedInformation = ($vars.humanEscalation.output || {}).callbackinfo; if (callback && action === \"Provide Info\" && (typeof providedInformation !== \"string\" || providedInformation.trim() === \"\")) throw new Error(\"Provide Info requires nonblank callback information.\"); const state = callback && action === \"Provide Info\" ? \"CALLBACK_INFORMATION_RECORDED\" : callback ? \"CALLBACK_REVIEW_COMPLETED_NO_EFFECT\" : action === \"Reject\" ? \"HUMAN_REJECTED\" : action === \"Escalate\" ? \"HUMAN_ESCALATED\" : \"HUMAN_ACTION_RECORDED_NO_EFFECT\"; const instanceId = typeof $metadata !== \"undefined\" && $metadata ? $metadata.instanceId : null; const provenance = { source: \"UiPath Action Center QuickForm\", action, performer_identity: null, performer_identity_available: false, flow_instance_id: instanceId, task_node_id: \"humanEscalation\" }; return { case_id: $vars.start.output.payment_case.case_id, path: callback ? \"CALLBACK_THEN_HUMAN\" : \"HUMAN_NO_EFFECT\", final_status: state, transitions: [\"INTAKE_RECEIVED\", \"AGENT_INVESTIGATION_STARTED\", \"AGENT_PROPOSED\", \"GATE_EVALUATED\", \"AUTONOMY_REFUSED\", \"HUMAN_ESCALATION_CREATED\", state, \"CASE_STATE_UPDATED\"], gate: decision.gate || null, reason: decision.reason, human_action: action, provided_information: callback && action === \"Provide Info\" ? providedInformation.trim() : null, effect: null, incident: null, reviewer_provenance: provenance, payment_write_performed: false };",
+        "errorHandlingEnabled": true
+      }
+    },
+    {
+      "id": "incidentLedger",
+      "type": "core.action.script",
+      "typeVersion": "1.0",
+      "display": {
+        "label": "Record process incident"
+      },
+      "inputs": {
+        "script": "const candidates = [[\"repairAgent\", ($vars.repairAgent || {}).error], [\"policyGate\", ($vars.policyGate || {}).error], [\"autoEffect\", ($vars.autoEffect || {}).error], [\"autoLedger\", ($vars.autoLedger || {}).error], [\"terminalLedger\", ($vars.terminalLedger || {}).error], [\"escalationPacket\", ($vars.escalationPacket || {}).error], [\"taskProjection\", ($vars.taskProjection || {}).error], [\"humanEffect\", ($vars.humanEffect || {}).error], [\"humanEffectLedger\", ($vars.humanEffectLedger || {}).error], [\"humanNoEffectLedger\", ($vars.humanNoEffectLedger || {}).error]]; const populated = (value) => value && (typeof value !== \"object\" || Object.keys(value).length > 0); const found = candidates.find((item) => populated(item[1])); const source = found ? found[0] : \"unknown\"; const raw = found ? found[1] : {}; const detail = raw && typeof raw.error === \"object\" ? raw.error : raw; const instanceId = typeof $metadata !== \"undefined\" && $metadata ? $metadata.instanceId : null; const incident = { source_node: source, code: detail.code || detail.errorCode || raw.code || \"FLOW_NODE_FAILURE\", message: detail.message || detail.errorMessage || raw.message || \"Unhandled flow node error.\", category: detail.category || detail.type || raw.category || \"runtime\", status: detail.status !== undefined && detail.status !== null ? String(detail.status) : raw.status !== undefined && raw.status !== null ? String(raw.status) : \"failed\", flow_instance_id: instanceId }; return { case_id: (($vars.start || {}).output || {}).payment_case ? $vars.start.output.payment_case.case_id : null, path: \"PROCESS_INCIDENT\", final_status: \"PROCESS_INCIDENT_RECORDED\", transitions: [\"PROCESS_INCIDENT_RECORDED\", \"CASE_STATE_UPDATED\"], gate: (($vars.policyGate || {}).output || {}).gate || null, reason: incident.message, human_action: (($vars.humanEscalation || {}).status || null), effect: null, incident, reviewer_provenance: null, payment_write_performed: false };"
       }
     },
     {
@@ -336,6 +389,15 @@
       "outputs": {
         "reviewedProposedValue": {
           "source": "=js:$vars.reviewedProposedValue"
+        },
+        "callbackInformation": {
+          "source": "=js:$vars.callbackInformation"
+        },
+        "ledgerState": {
+          "source": "=js:$vars.ledgerState"
+        },
+        "caseLedger": {
+          "source": "=js:$vars.ledgerState"
         }
       }
     }
@@ -426,9 +488,23 @@
       "targetPort": "input"
     },
     {
-      "id": "edge-human-completed-decision",
+      "id": "edge-human-completed-callback-decision",
       "sourceNodeId": "humanEscalation",
       "sourcePort": "completed",
+      "targetNodeId": "callbackNoEffectDecision",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-callback-no-effect",
+      "sourceNodeId": "callbackNoEffectDecision",
+      "sourcePort": "true",
+      "targetNodeId": "humanNoEffectLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-callback-human-authorization",
+      "sourceNodeId": "callbackNoEffectDecision",
+      "sourcePort": "false",
       "targetNodeId": "humanApprovalDecision",
       "targetPort": "input"
     },
@@ -463,6 +539,83 @@
     {
       "id": "edge-human-no-effect-ledger-end",
       "sourceNodeId": "humanNoEffectLedger",
+      "sourcePort": "success",
+      "targetNodeId": "end",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-repair-agent-incident",
+      "sourceNodeId": "repairAgent",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-policy-gate-incident",
+      "sourceNodeId": "policyGate",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-auto-effect-incident",
+      "sourceNodeId": "autoEffect",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-auto-ledger-incident",
+      "sourceNodeId": "autoLedger",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-terminal-ledger-incident",
+      "sourceNodeId": "terminalLedger",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-escalation-packet-incident",
+      "sourceNodeId": "escalationPacket",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-task-projection-incident",
+      "sourceNodeId": "taskProjection",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-human-effect-incident",
+      "sourceNodeId": "humanEffect",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-human-effect-ledger-incident",
+      "sourceNodeId": "humanEffectLedger",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-error-human-no-effect-ledger-incident",
+      "sourceNodeId": "humanNoEffectLedger",
+      "sourcePort": "error",
+      "targetNodeId": "incidentLedger",
+      "targetPort": "input"
+    },
+    {
+      "id": "edge-incident-ledger-end",
+      "sourceNodeId": "incidentLedger",
       "sourcePort": "success",
       "targetNodeId": "end",
       "targetPort": "input"
@@ -1652,18 +1805,20 @@
       }
     },
     {
-      "nodeType": "uipath.human-in-the-loop",
+      "nodeType": "uipath.human-in-the-loop.quick-form",
       "version": "1.0",
       "category": "human-task",
+      "description": "Fast inline approvals with inline debug",
       "tags": [
         "human-task",
         "hitl",
         "human-in-the-loop",
+        "quick-form",
         "approval"
       ],
-      "sortOrder": 50,
+      "sortOrder": 27,
       "display": {
-        "label": "Human in the Loop",
+        "label": "Quick Form",
         "icon": "users",
         "shape": "square"
       },
@@ -1684,7 +1839,6 @@
           "handles": [
             {
               "id": "completed",
-              "label": "Completed",
               "type": "source",
               "handleType": "output",
               "showButton": true,
@@ -1703,7 +1857,6 @@
         "serviceType": "Actions.HITL"
       },
       "inputDefaults": {
-        "type": "quick",
         "schema": {
           "fields": [],
           "outcomes": [
@@ -1736,10 +1889,89 @@
         },
         "status": {
           "type": "string",
-          "description": "Task completion status",
+          "description": "Task completion status (completed, cancelled, timeout)",
           "source": "=result.Action",
           "var": "status"
         }
+      },
+      "form": {
+        "id": "hitl-quick-form-properties",
+        "title": "Quick Form Task Configuration",
+        "sections": [
+          {
+            "id": "delivery",
+            "title": "Task Delivery",
+            "collapsible": true,
+            "defaultExpanded": true,
+            "fields": [
+              {
+                "name": "inputs.recipient",
+                "type": "custom",
+                "component": "hitl-channel-selector",
+                "label": "Delivery Channels",
+                "description": "Select where the task should be sent"
+              }
+            ]
+          },
+          {
+            "id": "schema",
+            "title": "Schema",
+            "collapsible": true,
+            "defaultExpanded": true,
+            "fields": [
+              {
+                "name": "inputs.schema",
+                "type": "custom",
+                "component": "hitl-schema-editor",
+                "label": "Task Schema",
+                "description": "Define the input and output parameters for this task"
+              }
+            ]
+          },
+          {
+            "id": "additional-properties",
+            "title": "Additional properties",
+            "collapsible": true,
+            "defaultExpanded": true,
+            "fields": [
+              {
+                "name": "inputs.title",
+                "type": "text",
+                "label": "Task title"
+              },
+              {
+                "name": "inputs.priority",
+                "type": "select",
+                "label": "Priority",
+                "options": [
+                  {
+                    "label": "Low",
+                    "value": "Low"
+                  },
+                  {
+                    "label": "Medium",
+                    "value": "Medium"
+                  },
+                  {
+                    "label": "High",
+                    "value": "High"
+                  }
+                ]
+              },
+              {
+                "name": "inputs.labels",
+                "type": "text",
+                "label": "Labels",
+                "placeholder": "Comma-separated (e.g. finance,approval)"
+              }
+            ]
+          }
+        ]
+      },
+      "runtimeConstraints": {
+        "exclude": [
+          "api-function"
+        ]
       }
     },
     {
@@ -1972,6 +2204,420 @@
         "type": "string",
         "defaultValue": "",
         "description": "Proposed value returned by the human review task."
+      },
+      {
+        "id": "callbackInformation",
+        "direction": "inout",
+        "type": "string",
+        "defaultValue": "",
+        "description": "Additional information recorded by the callback review task."
+      },
+      {
+        "id": "ledgerState",
+        "direction": "inout",
+        "type": "object",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "case_id",
+            "path",
+            "final_status",
+            "transitions",
+            "gate",
+            "reason",
+            "human_action",
+            "effect",
+            "incident",
+            "reviewer_provenance",
+            "payment_write_performed"
+          ],
+          "properties": {
+            "case_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "final_status": {
+              "type": "string"
+            },
+            "transitions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "gate": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "human_action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effect": {
+              "anyOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "incident": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source_node",
+                    "code",
+                    "message",
+                    "category",
+                    "status",
+                    "flow_instance_id"
+                  ],
+                  "properties": {
+                    "source_node": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reviewer_provenance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source",
+                    "action",
+                    "performer_identity",
+                    "performer_identity_available",
+                    "flow_instance_id",
+                    "task_node_id"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "performer_identity": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "performer_identity_available": {
+                      "type": "boolean"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "task_node_id": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "payment_write_performed": {
+              "type": "boolean"
+            },
+            "provided_information": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "overridable_in_app": {
+              "type": "boolean"
+            }
+          }
+        },
+        "defaultValue": {
+          "case_id": null,
+          "path": "PENDING",
+          "final_status": "PENDING",
+          "transitions": [
+            "FLOW_INITIALIZED"
+          ],
+          "gate": null,
+          "reason": "Awaiting terminal ledger record.",
+          "human_action": null,
+          "effect": null,
+          "incident": null,
+          "reviewer_provenance": null,
+          "payment_write_performed": false
+        },
+        "description": "Latest normalized terminal ledger record for the payment case."
+      },
+      {
+        "id": "caseLedger",
+        "direction": "out",
+        "type": "object",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "case_id",
+            "path",
+            "final_status",
+            "transitions",
+            "gate",
+            "reason",
+            "human_action",
+            "effect",
+            "incident",
+            "reviewer_provenance",
+            "payment_write_performed"
+          ],
+          "properties": {
+            "case_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "final_status": {
+              "type": "string"
+            },
+            "transitions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "gate": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "human_action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effect": {
+              "anyOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "incident": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source_node",
+                    "code",
+                    "message",
+                    "category",
+                    "status",
+                    "flow_instance_id"
+                  ],
+                  "properties": {
+                    "source_node": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reviewer_provenance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source",
+                    "action",
+                    "performer_identity",
+                    "performer_identity_available",
+                    "flow_instance_id",
+                    "task_node_id"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "performer_identity": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "performer_identity_available": {
+                      "type": "boolean"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "task_node_id": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "payment_write_performed": {
+              "type": "boolean"
+            },
+            "provided_information": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "overridable_in_app": {
+              "type": "boolean"
+            }
+          }
+        },
+        "description": "Normalized observable ledger result returned by every route."
       }
     ],
     "nodes": [
@@ -2370,6 +3016,24 @@
         }
       },
       {
+        "id": "callbackNoEffectDecision.matchedCase",
+        "type": "string",
+        "description": "The label of the matched branch (true/false label)",
+        "binding": {
+          "nodeId": "callbackNoEffectDecision",
+          "outputId": "matchedCase"
+        }
+      },
+      {
+        "id": "callbackNoEffectDecision.matchedCaseId",
+        "type": "string",
+        "description": "The branch that was taken (true or false)",
+        "binding": {
+          "nodeId": "callbackNoEffectDecision",
+          "outputId": "matchedCaseId"
+        }
+      },
+      {
         "id": "humanApprovalDecision.matchedCase",
         "type": "string",
         "description": "The label of the matched branch (true/false label)",
@@ -2440,6 +3104,436 @@
           "nodeId": "humanNoEffectLedger",
           "outputId": "error"
         }
+      },
+      {
+        "id": "incidentLedger.output",
+        "type": "object",
+        "description": "The return value of the script",
+        "binding": {
+          "nodeId": "incidentLedger",
+          "outputId": "output"
+        }
+      },
+      {
+        "id": "incidentLedger.error",
+        "type": "object",
+        "description": "Error information if the node fails",
+        "binding": {
+          "nodeId": "incidentLedger",
+          "outputId": "error"
+        }
+      },
+      {
+        "id": "end.reviewedProposedValue",
+        "type": "string",
+        "binding": {
+          "nodeId": "end",
+          "outputId": "reviewedProposedValue"
+        }
+      },
+      {
+        "id": "end.callbackInformation",
+        "type": "string",
+        "binding": {
+          "nodeId": "end",
+          "outputId": "callbackInformation"
+        }
+      },
+      {
+        "id": "end.ledgerState",
+        "type": "object",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "case_id",
+            "path",
+            "final_status",
+            "transitions",
+            "gate",
+            "reason",
+            "human_action",
+            "effect",
+            "incident",
+            "reviewer_provenance",
+            "payment_write_performed"
+          ],
+          "properties": {
+            "case_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "final_status": {
+              "type": "string"
+            },
+            "transitions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "gate": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "human_action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effect": {
+              "anyOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "incident": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source_node",
+                    "code",
+                    "message",
+                    "category",
+                    "status",
+                    "flow_instance_id"
+                  ],
+                  "properties": {
+                    "source_node": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reviewer_provenance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source",
+                    "action",
+                    "performer_identity",
+                    "performer_identity_available",
+                    "flow_instance_id",
+                    "task_node_id"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "performer_identity": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "performer_identity_available": {
+                      "type": "boolean"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "task_node_id": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "payment_write_performed": {
+              "type": "boolean"
+            },
+            "provided_information": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "overridable_in_app": {
+              "type": "boolean"
+            }
+          }
+        },
+        "binding": {
+          "nodeId": "end",
+          "outputId": "ledgerState"
+        }
+      },
+      {
+        "id": "end.caseLedger",
+        "type": "object",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "case_id",
+            "path",
+            "final_status",
+            "transitions",
+            "gate",
+            "reason",
+            "human_action",
+            "effect",
+            "incident",
+            "reviewer_provenance",
+            "payment_write_performed"
+          ],
+          "properties": {
+            "case_id": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "final_status": {
+              "type": "string"
+            },
+            "transitions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            },
+            "gate": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reason": {
+              "type": "string"
+            },
+            "human_action": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "effect": {
+              "anyOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "incident": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source_node",
+                    "code",
+                    "message",
+                    "category",
+                    "status",
+                    "flow_instance_id"
+                  ],
+                  "properties": {
+                    "source_node": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "reviewer_provenance": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "source",
+                    "action",
+                    "performer_identity",
+                    "performer_identity_available",
+                    "flow_instance_id",
+                    "task_node_id"
+                  ],
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "action": {
+                      "type": "string"
+                    },
+                    "performer_identity": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "performer_identity_available": {
+                      "type": "boolean"
+                    },
+                    "flow_instance_id": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "task_node_id": {
+                      "type": "string"
+                    }
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "payment_write_performed": {
+              "type": "boolean"
+            },
+            "provided_information": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "overridable_in_app": {
+              "type": "boolean"
+            }
+          }
+        },
+        "binding": {
+          "nodeId": "end",
+          "outputId": "caseLedger"
+        }
       }
     ],
     "variableUpdates": {
@@ -2447,6 +3541,40 @@
         {
           "variableId": "reviewedProposedValue",
           "expression": "=js:$vars.humanEscalation.output.proposedvalue"
+        },
+        {
+          "variableId": "callbackInformation",
+          "expression": "=js:$vars.humanEscalation.output.callbackinfo"
+        }
+      ],
+      "autoLedger": [
+        {
+          "variableId": "ledgerState",
+          "expression": "=js:$vars.autoLedger.output"
+        }
+      ],
+      "terminalLedger": [
+        {
+          "variableId": "ledgerState",
+          "expression": "=js:$vars.terminalLedger.output"
+        }
+      ],
+      "humanEffectLedger": [
+        {
+          "variableId": "ledgerState",
+          "expression": "=js:$vars.humanEffectLedger.output"
+        }
+      ],
+      "humanNoEffectLedger": [
+        {
+          "variableId": "ledgerState",
+          "expression": "=js:$vars.humanNoEffectLedger.output"
+        }
+      ],
+      "incidentLedger": [
+        {
+          "variableId": "ledgerState",
+          "expression": "=js:$vars.incidentLedger.output"
         }
       ]
     }
@@ -2477,7 +3605,7 @@
       "policyGate": {
         "position": {
           "x": 192,
-          "y": 0
+          "y": 96
         },
         "size": {
           "width": 96,
@@ -2487,7 +3615,7 @@
       "routeDecision": {
         "position": {
           "x": 384,
-          "y": 0
+          "y": 96
         },
         "size": {
           "width": 96,
@@ -2496,8 +3624,8 @@
       },
       "autoEffect": {
         "position": {
-          "x": 1536,
-          "y": 144
+          "x": 576,
+          "y": -48
         },
         "size": {
           "width": 96,
@@ -2506,8 +3634,8 @@
       },
       "autoLedger": {
         "position": {
-          "x": 1536,
-          "y": 144
+          "x": 768,
+          "y": -48
         },
         "size": {
           "width": 96,
@@ -2516,8 +3644,8 @@
       },
       "humanTaskEligible": {
         "position": {
-          "x": 1536,
-          "y": 144
+          "x": 576,
+          "y": 240
         },
         "size": {
           "width": 96,
@@ -2526,8 +3654,8 @@
       },
       "terminalLedger": {
         "position": {
-          "x": 1536,
-          "y": 144
+          "x": 768,
+          "y": 336
         },
         "size": {
           "width": 96,
@@ -2536,7 +3664,7 @@
       },
       "escalationPacket": {
         "position": {
-          "x": 1536,
+          "x": 768,
           "y": 144
         },
         "size": {
@@ -2546,7 +3674,7 @@
       },
       "taskProjection": {
         "position": {
-          "x": 1536,
+          "x": 960,
           "y": 144
         },
         "size": {
@@ -2557,7 +3685,17 @@
       "humanEscalation": {
         "position": {
           "x": 1152,
-          "y": 48
+          "y": 144
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "callbackNoEffectDecision": {
+        "position": {
+          "x": 1344,
+          "y": 144
         },
         "size": {
           "width": 96,
@@ -2567,7 +3705,7 @@
       "humanApprovalDecision": {
         "position": {
           "x": 1536,
-          "y": 144
+          "y": 240
         },
         "size": {
           "width": 96,
@@ -2576,8 +3714,8 @@
       },
       "humanEffect": {
         "position": {
-          "x": 1536,
-          "y": 144
+          "x": 1728,
+          "y": 240
         },
         "size": {
           "width": 96,
@@ -2586,8 +3724,8 @@
       },
       "humanEffectLedger": {
         "position": {
-          "x": 1536,
-          "y": 144
+          "x": 1920,
+          "y": 240
         },
         "size": {
           "width": 96,
@@ -2597,7 +3735,17 @@
       "humanNoEffectLedger": {
         "position": {
           "x": 1536,
-          "y": 144
+          "y": 48
+        },
+        "size": {
+          "width": 96,
+          "height": 96
+        }
+      },
+      "incidentLedger": {
+        "position": {
+          "x": 192,
+          "y": -96
         },
         "size": {
           "width": 96,
@@ -2606,8 +3754,8 @@
       },
       "end": {
         "position": {
-          "x": 960,
-          "y": -144
+          "x": 384,
+          "y": -96
         },
         "size": {
           "width": 96,
