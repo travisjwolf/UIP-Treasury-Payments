@@ -25,6 +25,13 @@ _REQUIRED_FIELDS = {
     "full_replacement_account_authorized",
     "transcript_text",
 }
+_TRANSCRIPT_FREE_TEXT_FIELDS = (
+    "customer_name",
+    "beneficiary_name",
+    "remittance_reference",
+    "transcript_text",
+)
+_FULL_ACCOUNT_PATTERN = re.compile(r"(?<!\d)\d(?:[ \-/.]*\d){4,}(?!\d)")
 
 
 def parse_callback_transcript(transcript: str) -> dict[str, Any]:
@@ -68,6 +75,13 @@ def parse_callback_transcript(transcript: str) -> dict[str, Any]:
         raise CallbackTranscriptError("invalid callback recorded timestamp") from error
     if recorded_at.tzinfo is None:
         raise CallbackTranscriptError("callback recorded timestamp must include timezone")
+    if any(
+        _FULL_ACCOUNT_PATTERN.search(fields[key])
+        for key in _TRANSCRIPT_FREE_TEXT_FIELDS
+    ):
+        raise CallbackTranscriptError(
+            "callback transcript contains a full account in a free-text field"
+        )
     if re.fullmatch(r"[A-Z0-9]+(?:-[A-Z0-9]+)+", fields["remittance_reference"]) is None:
         raise CallbackTranscriptError("invalid callback remittance reference")
     if re.fullmatch(r"\d{4}", fields["beneficiary_account_last_four"]) is None:
@@ -87,11 +101,6 @@ def parse_callback_transcript(transcript: str) -> dict[str, Any]:
         raise CallbackTranscriptError(
             "callback transcript must not provide or authorize a full account"
         )
-    if re.search(r"\b\d{5,}\b", fields["transcript_text"]):
-        raise CallbackTranscriptError(
-            "callback transcript text contains more than an account last four"
-        )
-
     return {
         "case_id": fields["case_id"],
         "recorded_at": fields["recorded_at"],
@@ -121,6 +130,10 @@ class CallbackTranscriptAnalyzer:
     def _normalized_name(value: str) -> str:
         with_and = value.casefold().replace("&", " and ")
         return " ".join(re.sub(r"[^a-z0-9]+", " ", with_and).split())
+
+    @classmethod
+    def is_mapped_case(cls, case_id: str) -> bool:
+        return case_id in cls._ASSETS
 
     def analyze(self, case: PaymentCaseLike) -> ToolResult:
         asset = self._ASSETS.get(case.case_id)

@@ -28,6 +28,8 @@ TRANSCRIPT_PATH = (
     / "data"
     / "WIRE-8877-callback-transcript.txt"
 )
+CALLBACK_SOURCE = "fixture://callback-transcripts/WIRE-8877.txt"
+NON_CALLBACK_EX04_CASES = ("WIRE-8903", "WIRE-8907", "WIRE-8914", "WIRE-8931")
 
 
 def load_fixture(case_id: str) -> dict:
@@ -60,6 +62,47 @@ def load_graph_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def valid_transcript(**overrides: str) -> str:
+    fields = {
+        "format_version": "CALLBACK_TRANSCRIPT_V1",
+        "case_id": "WIRE-8877",
+        "recorded_at": "2026-08-07T09:05:00Z",
+        "customer_name": "Northgate Property Partners",
+        "beneficiary_name": "ATLAS TITLE & ESCROW",
+        "remittance_reference": "NG-2291",
+        "beneficiary_account_last_four": "2299",
+        "full_replacement_account_provided": "false",
+        "full_replacement_account_authorized": "false",
+        "transcript_text": "Synthetic callback with account last four 2299.",
+    }
+    fields.update(overrides)
+    return "".join(f"{key}: {value}\n" for key, value in fields.items())
+
+
+def assert_sanitized_callback_failure(raw_output: dict) -> None:
+    output = AgentOutput.from_dict(raw_output)
+    assert output.outcome == "EXHAUSTED"
+    assert output.proposed_action is None
+    assert output.confidence == 0.0
+    assert output.tools_called == ["callback_transcript"]
+    assert len(output.evidence) == 1
+    evidence = output.evidence[0]
+    assert evidence.type == "call_transcript"
+    assert evidence.source == "runtime://tool-call"
+    assert evidence.produced_by == "agent_runtime"
+    assert json.loads(evidence.content) == {
+        "attempt": 1,
+        "error_type": "CallbackTranscriptError",
+        "status": "error",
+        "tool_name": "callback_transcript",
+    }
+    serialized = json.dumps(raw_output)
+    assert "4471-9022-99" not in serialized
+    assert "4471 9022 99" not in serialized
+    assert "4471/9022/99" not in serialized
+    assert "4471.9022.99" not in serialized
 
 
 def test_prerecorded_transcript_is_synthetic_explicit_and_packaged():
@@ -178,6 +221,34 @@ def test_callback_parser_fails_closed_for_missing_fields_or_full_account(
         parser(malformed_transcript)
 
 
+@pytest.mark.parametrize(
+    ("field", "account_text"),
+    [
+        (field, account_text)
+        for field in (
+            "customer_name",
+            "beneficiary_name",
+            "remittance_reference",
+            "transcript_text",
+        )
+        for account_text in (
+            "4471-9022-99",
+            "4471 9022 99",
+            "4471/9022/99",
+            "4471.9022.99",
+        )
+    ],
+)
+def test_callback_parser_rejects_full_accounts_across_common_separators(
+    field: str,
+    account_text: str,
+):
+    _, error_type, parser = callback_api()
+
+    with pytest.raises(error_type, match="full account"):
+        parser(valid_transcript(**{field: f"value {account_text} value"}))
+
+
 @pytest.mark.anyio
 async def test_wire_8877_returns_one_canonical_callback_evidence_record():
     raw_output = await analyze_fixture(
@@ -239,6 +310,138 @@ async def test_real_langgraph_entrypoint_defaults_to_callback_analysis():
     assert output.tools_called == ["callback_transcript"]
     assert len(output.evidence) == 1
     assert output.evidence[0].type == "call_transcript"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("case_id", NON_CALLBACK_EX04_CASES)
+async def test_non_callback_ex04_cases_preserve_the_prior_closed_agent_path(
+    case_id: str,
+):
+    output = AgentOutput.from_dict(
+        await analyze_fixture(load_fixture(case_id), tooling.CsvRepairTools())
+    )
+
+    assert output.outcome == "EXHAUSTED"
+    assert output.proposed_action is None
+    assert output.confidence == 0.0
+    assert "callback_transcript" not in output.tools_called
+    assert output.tools_called == [
+        "sanctions",
+        "account_lookup",
+        "counterparty_history",
+        "documents",
+    ] * 3
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("case_id", "expected_outcome"),
+    [
+        ("WIRE-8877", "NEEDS_INFO"),
+        *((case_id, "EXHAUSTED") for case_id in NON_CALLBACK_EX04_CASES),
+    ],
+)
+async def test_real_langgraph_entrypoint_returns_a_closed_output_for_every_ex04_fixture(
+    case_id: str,
+    expected_outcome: str,
+):
+    module = load_graph_module()
+
+    output = AgentOutput.from_dict(await module.graph.ainvoke(load_fixture(case_id)))
+
+    assert output.outcome == expected_outcome
+    assert output.proposed_action is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failure_kind", ["missing", "malformed"])
+async def test_mapped_callback_asset_failures_return_sanitized_closed_output(
+    monkeypatch,
+    tmp_path: Path,
+    failure_kind: str,
+):
+    analyzer_type, _, _ = callback_api()
+    asset_path = tmp_path / "mapped-callback.txt"
+    if failure_kind == "malformed":
+        asset_path.write_text(
+            valid_transcript(
+                transcript_text="Caller states replacement account 4471-9022-99."
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(
+        analyzer_type,
+        "_ASSETS",
+        {"WIRE-8877": (asset_path, CALLBACK_SOURCE)},
+    )
+
+    raw_output = await analyze_fixture(
+        load_fixture("WIRE-8877"), tooling.CsvRepairTools()
+    )
+
+    assert_sanitized_callback_failure(raw_output)
+
+
+@pytest.mark.anyio
+async def test_mapped_callback_invariant_failure_returns_sanitized_closed_output(
+    monkeypatch,
+):
+    analyzer_type, _, _ = callback_api()
+
+    def invalid_result(_self, case):
+        data = {
+            "transcript": {"case_id": case.case_id},
+            "flagged_fields": [],
+            "untrusted_value": "4471-9022-99",
+        }
+        return tooling.ToolResult(
+            tool_name="callback_transcript",
+            data=data,
+            evidence=tooling.EvidenceRecord(
+                case_id=case.case_id,
+                type="call_transcript",
+                source=CALLBACK_SOURCE,
+                content=json.dumps(data, sort_keys=True),
+                produced_by="callback_transcript",
+                timestamp="2026-08-07T09:05:00Z",
+            ),
+        )
+
+    monkeypatch.setattr(analyzer_type, "analyze", invalid_result)
+
+    raw_output = await analyze_fixture(
+        load_fixture("WIRE-8877"), tooling.CsvRepairTools()
+    )
+
+    assert_sanitized_callback_failure(raw_output)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("failure_kind", ["missing", "malformed"])
+async def test_real_langgraph_entrypoint_closes_mapped_callback_asset_failures(
+    monkeypatch,
+    tmp_path: Path,
+    failure_kind: str,
+):
+    module = load_graph_module()
+    analyzer_type = module.analyze_fixture.__globals__["CallbackTranscriptAnalyzer"]
+    asset_path = tmp_path / "mapped-graph-callback.txt"
+    if failure_kind == "malformed":
+        asset_path.write_text(
+            valid_transcript(
+                beneficiary_name="Replacement account 4471 9022 99"
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.setattr(
+        analyzer_type,
+        "_ASSETS",
+        {"WIRE-8877": (asset_path, CALLBACK_SOURCE)},
+    )
+
+    raw_output = await module.graph.ainvoke(load_fixture("WIRE-8877"))
+
+    assert_sanitized_callback_failure(raw_output)
 
 
 def test_callback_analysis_does_not_extend_repair_tools_protocol():
