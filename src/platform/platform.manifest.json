@@ -1,0 +1,152 @@
+{
+  "manifest_version": 1,
+  "schema_approval": {
+    "required": true,
+    "reason": "UiPath Data Fabric rejects status and type as reserved language keywords, while timestamp is conservatively treated as a SQL keyword/type; live apply requires explicit approval of their stable physical adapters.",
+    "logical_to_physical": {
+      "PaymentCase.status": "payment_status",
+      "Evidence.type": "evidence_type",
+      "Evidence.timestamp": "evidence_timestamp"
+    }
+  },
+  "entities": [
+    {
+      "contract": "PaymentCase",
+      "physical_name": "PaymentCase",
+      "display_name": "Payment Case",
+      "description": "In-flight treasury payment and repair state. Logical contract fields are preserved through the declared adapter mappings.",
+      "is_rbac_enabled": true,
+      "fields": [
+        {"logical_name":"case_id","physical_name":"case_id","type":"STRING","display_name":"Case ID","description":"Stable payment-case identifier.","is_required":true,"is_unique":true,"length_limit":64},
+        {"logical_name":"rail","physical_name":"rail","type":"STRING","display_name":"Rail","description":"Payment rail.","is_required":true,"length_limit":32},
+        {"logical_name":"direction","physical_name":"direction","type":"STRING","display_name":"Direction","description":"Inbound or outbound direction.","is_required":true,"length_limit":16},
+        {"logical_name":"amount_usd","physical_name":"amount_usd","type":"DECIMAL","display_name":"Amount USD","description":"USD-equivalent payment amount.","is_required":true,"min_value":0,"decimal_precision":2},
+        {"logical_name":"currency","physical_name":"currency","type":"STRING","display_name":"Currency","description":"ISO 4217 currency code.","is_required":true,"length_limit":3},
+        {"logical_name":"value_date","physical_name":"value_date","type":"DATE","display_name":"Value Date","description":"Payment value date.","is_required":true},
+        {"logical_name":"cutoff_time","physical_name":"cutoff_time","type":"STRING","display_name":"Cutoff Time","description":"Rail cutoff time preserved as the logical contract string.","is_required":true,"length_limit":8},
+        {"logical_name":"sla_deadline","physical_name":"sla_deadline","type":"DATETIME_WITH_TZ","display_name":"SLA Deadline","description":"Optional timezone-aware service deadline."},
+        {"logical_name":"source_channel","physical_name":"source_channel","type":"STRING","display_name":"Source Channel","description":"Originating payment channel.","is_required":true,"length_limit":64},
+        {"logical_name":"customer_id","physical_name":"customer_id","type":"STRING","display_name":"Customer ID","description":"Originating customer identifier.","is_required":true,"length_limit":64},
+        {"logical_name":"customer_name","physical_name":"customer_name","type":"STRING","display_name":"Customer Name","description":"Originating customer name.","is_required":true,"length_limit":256},
+        {"logical_name":"beneficiary_name","physical_name":"beneficiary_name","type":"STRING","display_name":"Beneficiary Name","description":"Beneficiary name on the payment instruction.","is_required":true,"length_limit":256},
+        {"logical_name":"beneficiary_account","physical_name":"beneficiary_account","type":"STRING","display_name":"Beneficiary Account","description":"Beneficiary account identifier.","is_required":true,"is_encrypted":true,"length_limit":128},
+        {"logical_name":"beneficiary_bank_aba","physical_name":"beneficiary_bank_aba","type":"STRING","display_name":"Beneficiary Bank ABA","description":"Beneficiary bank routing identifier.","is_required":true,"length_limit":32},
+        {"logical_name":"remittance_info","physical_name":"remittance_info","type":"MULTILINE_TEXT","display_name":"Remittance Information","description":"Payment remittance content.","is_required":true,"length_limit":4000},
+        {"logical_name":"exception_code","physical_name":"exception_code","type":"STRING","display_name":"Exception Code","description":"Closed exception taxonomy code.","is_required":true,"length_limit":16},
+        {"logical_name":"exception_type","physical_name":"exception_type","type":"STRING","display_name":"Exception Type","description":"Closed exception taxonomy type.","is_required":true,"length_limit":128},
+        {"logical_name":"current_queue","physical_name":"current_queue","type":"STRING","display_name":"Current Queue","description":"Current operational queue.","is_required":true,"length_limit":128},
+        {"logical_name":"status","physical_name":"payment_status","type":"STRING","display_name":"Status","description":"Logical status field stored under a non-reserved physical name.","is_required":true,"length_limit":64},
+        {"logical_name":"worked_by","physical_name":"worked_by","type":"STRING","display_name":"Worked By","description":"Current or last operator identifier.","length_limit":128},
+        {"logical_name":"confidence","physical_name":"confidence","type":"DECIMAL","display_name":"Confidence","description":"Agent confidence from zero to one.","min_value":0,"max_value":1,"decimal_precision":4},
+        {"logical_name":"proposed_action","physical_name":"proposed_action","type":"MULTILINE_TEXT","display_name":"Proposed Action","description":"Serialized typed proposed-action payload.","length_limit":10000},
+        {"logical_name":"outcome","physical_name":"outcome","type":"STRING","display_name":"Outcome","description":"Closed repair-agent outcome enum.","length_limit":64},
+        {"logical_name":"touch_count","physical_name":"touch_count","type":"INTEGER","display_name":"Touch Count","description":"Number of human or automated touches.","is_required":true,"min_value":0,"default_value":"0"},
+        {"logical_name":"cycle_time","physical_name":"cycle_time","type":"DOUBLE","display_name":"Cycle Time","description":"Elapsed processing time in seconds.","min_value":0}
+      ]
+    },
+    {
+      "contract": "Evidence",
+      "physical_name": "Evidence",
+      "display_name": "Evidence",
+      "description": "Evidence records supporting repair proposals and policy decisions.",
+      "is_rbac_enabled": true,
+      "fields": [
+        {"logical_name":"case_id","physical_name":"case_id","type":"STRING","display_name":"Case ID","description":"Related payment-case identifier.","is_required":true,"length_limit":64},
+        {"logical_name":"type","physical_name":"evidence_type","type":"STRING","display_name":"Type","description":"Logical evidence type stored under a non-reserved physical name.","is_required":true,"length_limit":32},
+        {"logical_name":"source","physical_name":"source","type":"STRING","display_name":"Source","description":"Evidence source or lookup origin.","is_required":true,"length_limit":512},
+        {"logical_name":"content","physical_name":"content","type":"MULTILINE_TEXT","display_name":"Content","description":"String or serialized object returned by the evidence producer.","is_required":true,"length_limit":10000},
+        {"logical_name":"produced_by","physical_name":"produced_by","type":"STRING","display_name":"Produced By","description":"Read-only tool or component that produced the evidence.","is_required":true,"length_limit":128},
+        {"logical_name":"timestamp","physical_name":"evidence_timestamp","type":"DATETIME_WITH_TZ","display_name":"Timestamp","description":"Logical timestamp stored under a conservative non-reserved physical name.","is_required":true}
+      ]
+    },
+    {
+      "contract": "CounterpartyHistory",
+      "physical_name": "CounterpartyHistory",
+      "display_name": "Counterparty History",
+      "description": "Prior beneficiary relationships used by the read-only repair tool layer.",
+      "is_rbac_enabled": true,
+      "fields": [
+        {"logical_name":"customer_id","physical_name":"customer_id","type":"STRING","display_name":"Customer ID","description":"Originating customer identifier.","is_required":true,"length_limit":64},
+        {"logical_name":"beneficiary_name","physical_name":"beneficiary_name","type":"STRING","display_name":"Beneficiary Name","description":"Previously observed registered beneficiary name.","is_required":true,"length_limit":256},
+        {"logical_name":"beneficiary_account","physical_name":"beneficiary_account","type":"STRING","display_name":"Beneficiary Account","description":"Previously observed beneficiary account.","is_required":true,"is_encrypted":true,"length_limit":128},
+        {"logical_name":"times_seen","physical_name":"times_seen","type":"INTEGER","display_name":"Times Seen","description":"Number of prior observed payments.","is_required":true,"min_value":0},
+        {"logical_name":"times_repaired","physical_name":"times_repaired","type":"INTEGER","display_name":"Times Repaired","description":"Number of prior repaired payments.","is_required":true,"min_value":0},
+        {"logical_name":"last_applied_fix","physical_name":"last_applied_fix","type":"STRING","display_name":"Last Applied Fix","description":"Last human- or effector-applied repair.","is_required":true,"length_limit":1000},
+        {"logical_name":"history_confidence","physical_name":"history_confidence","type":"DECIMAL","display_name":"History Confidence","description":"Confidence in the counterparty history record.","is_required":true,"min_value":0,"max_value":1,"decimal_precision":4}
+      ]
+    },
+    {
+      "contract": "PolicyDecision",
+      "physical_name": "PolicyDecision",
+      "display_name": "Policy Decision",
+      "description": "Auditable output of the deterministic gate evaluator.",
+      "is_rbac_enabled": true,
+      "fields": [
+        {"logical_name":"case_id","physical_name":"case_id","type":"STRING","display_name":"Case ID","description":"Related payment-case identifier.","is_required":true,"length_limit":64},
+        {"logical_name":"gate","physical_name":"gate","type":"STRING","display_name":"Gate","description":"First gate that fired, NONE, or null.","length_limit":16},
+        {"logical_name":"result","physical_name":"result","type":"STRING","display_name":"Result","description":"Deterministic policy disposition.","is_required":true,"length_limit":64},
+        {"logical_name":"reason","physical_name":"reason","type":"MULTILINE_TEXT","display_name":"Reason","description":"Plain-language deterministic gate reason.","is_required":true,"length_limit":4000},
+        {"logical_name":"evaluated_at","physical_name":"evaluated_at","type":"DATETIME_WITH_TZ","display_name":"Evaluated At","description":"Timezone-aware evaluation time.","is_required":true}
+      ]
+    },
+    {
+      "contract": "PolicyConfig",
+      "physical_name": "CustomerGateSettings",
+      "display_name": "Customer Gate Settings",
+      "description": "Per-customer values for configurable gates G3, G5, G8, and G10. Fixed gates G0, G1, and G2 are intentionally absent.",
+      "is_rbac_enabled": true,
+      "fields": [
+        {"logical_name":"customer_id","physical_name":"customer_id","type":"STRING","display_name":"Customer ID","description":"Customer whose deterministic thresholds apply.","is_required":true,"is_unique":true,"length_limit":64},
+        {"logical_name":"auto_apply_amount_threshold_usd","physical_name":"auto_apply_amount_threshold_usd","type":"DECIMAL","display_name":"G3 Auto-Apply Amount Threshold USD","description":"G3 amount ceiling for autonomous eligibility.","is_required":true,"min_value":0,"decimal_precision":2},
+        {"logical_name":"minimum_confidence","physical_name":"minimum_confidence","type":"DECIMAL","display_name":"G5 Minimum Confidence","description":"G5 minimum evidence-backed confidence.","is_required":true,"min_value":0,"max_value":1,"decimal_precision":4},
+        {"logical_name":"same_day_beneficiary_velocity_threshold_usd","physical_name":"same_day_beneficiary_velocity_threshold_usd","type":"DECIMAL","display_name":"G8 Beneficiary Velocity Threshold USD","description":"G8 same-day beneficiary cumulative-value ceiling.","is_required":true,"min_value":0,"decimal_precision":2},
+        {"logical_name":"cutoff_escalation_minutes","physical_name":"cutoff_escalation_minutes","type":"INTEGER","display_name":"G10 Cutoff Escalation Minutes","description":"G10 remaining-cutoff priority window.","is_required":true,"min_value":1}
+      ]
+    }
+  ],
+  "gate_settings": {
+    "entity_contract": "PolicyConfig",
+    "seeds": [
+      {"customer_id":"CUST-1042","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1188","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1233","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1301","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1355","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1409","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1477","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30},
+      {"customer_id":"CUST-1520","auto_apply_amount_threshold_usd":250000.0,"minimum_confidence":0.85,"same_day_beneficiary_velocity_threshold_usd":5000000.0,"cutoff_escalation_minutes":30}
+    ]
+  },
+  "orchestrator": {
+    "folder": {
+      "name": "TreasuryPayments",
+      "path": "TreasuryPayments",
+      "description": "Payment Operations Control Tower resources.",
+      "permission_model": "FineGrained",
+      "feed_type": "Processes",
+      "provision_type": "Automatic"
+    },
+    "queues": [
+      {"name":"PaymentRepairIntake","description":"Validated payment-repair intake requests.","max_retries":0,"auto_retry":false,"retry_abandoned_items":false,"enforce_unique_reference":true,"encrypted":true,"retention_action":"Archive","retention_period_days":30,"stale_retention_action":"Archive","stale_retention_period_days":180},
+      {"name":"PaymentEffectRequests","description":"Typed repair requests consumed only by credentialed effectors.","max_retries":3,"auto_retry":true,"retry_abandoned_items":false,"enforce_unique_reference":true,"encrypted":true,"retention_action":"Archive","retention_period_days":30,"stale_retention_action":"Archive","stale_retention_period_days":180},
+      {"name":"PaymentEscalations","description":"Compliance and human-review escalation work packets.","max_retries":0,"auto_retry":false,"retry_abandoned_items":false,"enforce_unique_reference":true,"encrypted":true,"retention_action":"Archive","retention_period_days":30,"stale_retention_action":"Archive","stale_retention_period_days":180}
+    ],
+    "assets": [
+      {"name":"PaymentCaseEntityName","value_type":"Text","value":"PaymentCase","scope":"Global","description":"Physical Data Fabric entity for PaymentCase."},
+      {"name":"EvidenceEntityName","value_type":"Text","value":"Evidence","scope":"Global","description":"Physical Data Fabric entity for Evidence."},
+      {"name":"CounterpartyHistoryEntityName","value_type":"Text","value":"CounterpartyHistory","scope":"Global","description":"Physical Data Fabric entity for CounterpartyHistory."},
+      {"name":"PolicyDecisionEntityName","value_type":"Text","value":"PolicyDecision","scope":"Global","description":"Physical Data Fabric entity for PolicyDecision."},
+      {"name":"CustomerGateSettingsEntityName","value_type":"Text","value":"CustomerGateSettings","scope":"Global","description":"Physical Data Fabric entity for per-customer gate settings."},
+      {"name":"PaymentRepairIntakeQueueName","value_type":"Text","value":"PaymentRepairIntake","scope":"Global","description":"Orchestrator intake queue name."},
+      {"name":"PaymentEffectRequestsQueueName","value_type":"Text","value":"PaymentEffectRequests","scope":"Global","description":"Orchestrator effector-request queue name."},
+      {"name":"PaymentEscalationsQueueName","value_type":"Text","value":"PaymentEscalations","scope":"Global","description":"Orchestrator escalation queue name."},
+      {"name":"AgentMaxIterations","value_type":"Integer","value":3,"scope":"Global","description":"Hard repair-loop iteration cap matching the coded-agent runtime default."},
+      {"name":"AgentTokenBudget","value_type":"Integer","value":1200,"scope":"Global","description":"Hard repair-loop token budget matching the coded-agent runtime default."},
+      {"name":"PaymentAutoApplyEnabled","value_type":"Bool","value":true,"scope":"Global","description":"Allows only gate-approved repairs to enter the credentialed effector lane."}
+    ]
+  },
+  "security": {
+    "allow_secret_assets": false,
+    "agent_write_credentials": false
+  }
+}

@@ -1,0 +1,18 @@
+customer_id,beneficiary_name,beneficiary_account,times_seen,times_repaired,last_applied_fix,history_confidence
+CUST-1042,PACIFIC STEEL & SUPPLY,4628492309,11,4,expand_truncated_account,0.73
+CUST-1355,MERIDIAN EQUIPMENT LEASING,8651473191,15,6,normalize_name_to_registered_entity,0.82
+CUST-1355,COASTAL FUEL DISTRIBUTORS,0517769650,17,8,append_check_digit,0.91
+CUST-1409,ATLAS TITLE & ESCROW,2564498535,17,7,normalize_name_to_registered_entity,0.86
+CUST-1355,ATLAS TITLE & ESCROW,1460314188,17,3,correct_transposed_digits,0.69
+CUST-1520,SUMMIT PAYROLL SERVICES,4859688829,28,2,add_intermediary_aba,0.64
+CUST-1233,SUMMIT PAYROLL SERVICES,1355603928,24,8,normalize_name_to_registered_entity,0.91
+CUST-1477,SUMMIT PAYROLL SERVICES,9402184712,28,4,add_intermediary_aba,0.73
+CUST-1409,GRANITE ROOFING SUPPLY,6734972724,19,2,expand_truncated_account,0.64
+CUST-1520,GRANITE ROOFING SUPPLY,5442932572,19,2,expand_truncated_account,0.64
+CUST-1233,GRANITE ROOFING SUPPLY,7744334382,22,6,append_check_digit,0.82
+CUST-1477,VERTEX MEDICAL DEVICES,6937478935,14,7,correct_transposed_digits,0.86
+CUST-1188,VERTEX MEDICAL DEVICES,1874495272,21,9,correct_transposed_digits,0.96
+CUST-1520,VERTEX MEDICAL DEVICES,7973331891,6,3,append_check_digit,0.69
+CUST-1409,IRONWOOD LUMBER CO,2360152646,22,5,add_intermediary_aba,0.78
+CUST-1409,CLEARWATER SANITATION,2256487789,31,12,normalize_name_to_registered_entity,0.98
+CUST-1042,PACIFIC STEEL & SUPPLY,8823004417,31,11,expand_truncated_account,0.94

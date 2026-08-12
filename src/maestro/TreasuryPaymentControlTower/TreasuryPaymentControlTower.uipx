@@ -7,6 +7,11 @@
       "Type": "Flow",
       "ProjectRelativePath": "WireRepair/project.uiproj",
       "Id": "2005eaac-dd72-45ab-a213-66e9fcdecdbe"
+    },
+    {
+      "Type": "Agent",
+      "ProjectRelativePath": "agent/project.uiproj",
+      "Id": "f5126a0b-1836-4aa7-bd7b-0430dc7f5a08"
     }
   ]
 }
